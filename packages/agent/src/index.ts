@@ -1,5 +1,5 @@
 export type { GenerateOptions, ProviderChunk, ProviderContract } from './contracts/provider.js';
-export type { ToolContract } from './contracts/tool.js';
+export type { ToolBase, ToolContract } from './contracts/tool.js';
 export { ToolRegistry } from './registry.js';
 export { autoApprovePolicy, type ToolExecutionPolicy } from './policy.js';
 export { AgentSession, type AgentSessionOptions } from './session.js';

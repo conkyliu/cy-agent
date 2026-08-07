@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { ToolContract } from '@cy-agent/agent';
+import type { ToolBase, ToolContract } from '@cy-agent/agent';
 import { resolveInWorkspace, SKIPPED_DIRECTORIES } from './workspace.js';
 
 export interface ReadFileArgs {
@@ -199,7 +199,7 @@ async function collectFiles(root: string, signal?: AbortSignal): Promise<string[
 }
 
 /** 创建全部内置编码工具，所有路径均沙箱化在 cwd 工作区内。 */
-export function createCodingTools(cwd: string): ToolContract[] {
+export function createCodingTools(cwd: string): ToolBase[] {
   return [
     createReadFileTool(cwd),
     createWriteFileTool(cwd),

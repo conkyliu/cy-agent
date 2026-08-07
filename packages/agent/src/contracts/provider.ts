@@ -1,9 +1,9 @@
 import type { Message, ToolCall } from '@cy-agent/protocol';
-import type { ToolContract } from './tool.js';
+import type { ToolBase } from './tool.js';
 
 export interface GenerateOptions {
   messages: Message[];
-  tools?: ToolContract[];
+  tools?: ToolBase[];
   /** 用于 Session 取消 */
   signal?: AbortSignal;
 }

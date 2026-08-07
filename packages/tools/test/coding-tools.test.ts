@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ToolContract } from '@cy-agent/agent';
+import type { ToolBase } from '@cy-agent/agent';
 import { AgentSession, ToolRegistry } from '@cy-agent/agent';
 import {
   createCodingTools,
@@ -15,7 +15,7 @@ import { MockProvider, textChunks, toolCallChunks } from '../../agent/test/fixtu
 import type { AgentEvent } from '@cy-agent/protocol';
 
 let cwd: string;
-let tools: Map<string, ToolContract>;
+let tools: Map<string, ToolBase>;
 
 beforeEach(async () => {
   cwd = await mkdtemp(path.join(os.tmpdir(), 'cy-agent-tools-'));
@@ -26,7 +26,7 @@ afterEach(async () => {
   await rm(cwd, { recursive: true, force: true });
 });
 
-function tool(name: string): ToolContract {
+function tool(name: string): ToolBase {
   const found = tools.get(name);
   if (!found) {
     throw new Error(`Tool ${name} not found`);
