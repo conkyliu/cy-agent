@@ -10,6 +10,7 @@ export default defineConfig({
       '@cy-agent/agent': here('./packages/agent/src/index.ts'),
       '@cy-agent/tools': here('./packages/tools/src/index.ts'),
       '@cy-agent/openai-provider': here('./packages/openai-provider/src/index.ts'),
+      '@cy-agent/cli': here('./packages/cli/src/index.ts'),
     },
   },
   test: {

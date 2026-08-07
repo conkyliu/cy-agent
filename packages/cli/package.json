@@ -1,0 +1,26 @@
+{
+  "name": "@cy-agent/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Interactive coding agent CLI (REPL, HITL approval host)",
+  "bin": {
+    "cy-agent": "./dist/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@cy-agent/agent": "workspace:*",
+    "@cy-agent/openai-provider": "workspace:*",
+    "@cy-agent/protocol": "workspace:*",
+    "@cy-agent/tools": "workspace:*"
+  }
+}
