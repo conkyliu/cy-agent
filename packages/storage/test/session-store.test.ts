@@ -84,4 +84,38 @@ describe('JsonFileSessionStore', () => {
     await fs.writeFile(path.join(dir, 'corrupt.json'), '{"id": 123}', 'utf8');
     expect(await store.load('corrupt')).toBeNull();
   });
+
+  it('title 可保存并在加载与列表摘要中返回', async () => {
+    const store = setup();
+    await store.save({
+      id: 'titled',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      messages: makeMessages(1),
+      title: 'Fix the login bug',
+    });
+    const loaded = await store.load('titled');
+    expect(loaded?.title).toBe('Fix the login bug');
+    const summaries = await store.list();
+    expect(summaries[0]?.title).toBe('Fix the login bug');
+  });
+
+  it('无 title 的旧格式会话仍可加载，title 非字符串时视为损坏', async () => {
+    const store = setup();
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(
+      path.join(dir, 'legacy.json'),
+      JSON.stringify({ id: 'legacy', updatedAt: '2026-01-01T00:00:00.000Z', messages: [] }),
+      'utf8',
+    );
+    const legacy = await store.load('legacy');
+    expect(legacy).not.toBeNull();
+    expect(legacy?.title).toBeUndefined();
+
+    await fs.writeFile(
+      path.join(dir, 'badtitle.json'),
+      JSON.stringify({ id: 'badtitle', updatedAt: '2026-01-01T00:00:00.000Z', messages: [], title: 42 }),
+      'utf8',
+    );
+    expect(await store.load('badtitle')).toBeNull();
+  });
 });

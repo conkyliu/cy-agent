@@ -16,6 +16,8 @@ export interface StoredSession {
   updatedAt: string;
   /** 非 system 消息 */
   messages: Message[];
+  /** 可选标题（通常取首条用户消息摘要），便于多会话列表辨识。 */
+  title?: string;
 }
 
 export interface SessionSummary {
@@ -23,6 +25,8 @@ export interface SessionSummary {
   updatedAt: string;
   /** 消息条数，便于列表展示 */
   messageCount: number;
+  /** 可选标题，缺失时为 undefined。 */
+  title?: string;
 }
 
 export interface SessionStore {
@@ -84,11 +88,15 @@ export class JsonFileSessionStore implements SessionStore {
         const raw = await fs.readFile(path.join(this.directory, entry), 'utf8');
         const session = parseSession(raw);
         if (session !== null) {
-          summaries.push({
+          const summary: SessionSummary = {
             id: session.id,
             updatedAt: session.updatedAt,
             messageCount: session.messages.length,
-          });
+          };
+          if (session.title !== undefined) {
+            summary.title = session.title;
+          }
+          summaries.push(summary);
         }
       } catch {
         // 单个文件损坏不影响列表能力。
@@ -122,6 +130,9 @@ function parseSession(raw: string): StoredSession | null {
       typeof parsed?.updatedAt !== 'string' ||
       !Array.isArray(parsed?.messages)
     ) {
+      return null;
+    }
+    if (parsed.title !== undefined && typeof parsed.title !== 'string') {
       return null;
     }
     return parsed;

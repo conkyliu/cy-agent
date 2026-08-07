@@ -16,6 +16,8 @@ import {
 export interface AgentSessionOptions {
   provider: ProviderContract;
   registry: ToolRegistry;
+  /** 恢复存档会话时传入原 ID，保证持久化文件连续；缺省自动生成。 */
+  id?: string;
   systemPrompt?: string;
   /**
    * 恢复历史会话时的前置消息（追加在 system 消息之后）。
@@ -57,7 +59,7 @@ export class AgentSession {
   private running = false;
 
   constructor(private readonly options: AgentSessionOptions) {
-    this.id = randomUUID();
+    this.id = options.id ?? randomUUID();
     this.policy = options.policy ?? autoApprovePolicy;
     this.maxIterations = options.maxIterations ?? 20;
     this.maxInputTokens = options.contextBudget?.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS;

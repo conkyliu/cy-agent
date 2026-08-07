@@ -5,7 +5,7 @@ import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { ToolBase } from '@cy-agent/agent';
 import { AgentSession, ToolRegistry } from '@cy-agent/agent';
-import type { AgentEvent } from '@cy-agent/protocol';
+import type { AgentEvent, Message } from '@cy-agent/protocol';
 import { JsonFileSessionStore } from '@cy-agent/storage';
 import { MockProvider, textChunks, toolCallChunks } from '../../agent/test/fixtures.js';
 import { loadConfig, parseCliArgs } from '../src/config.js';
@@ -224,5 +224,143 @@ describe('runRepl 会话持久化', () => {
     await replDone;
 
     expect(captured).toContain('not enabled');
+  });
+});
+
+describe('runRepl 多会话管理', () => {
+  function captureStreams(): {
+    input: PassThrough;
+    output: PassThrough;
+    text: () => string;
+  } {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    let captured = '';
+    output.on('data', (chunk: Buffer) => {
+      captured += chunk.toString();
+    });
+    return { input, output, text: () => captured };
+  }
+
+  it('/new 开启新会话，/open 恢复历史会话，/sessions 标记当前会话', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cy-multi-session-'));
+    try {
+      const store = new JsonFileSessionStore(dir);
+      const provider = new MockProvider([
+        textChunks('first reply'),
+        textChunks('second reply'),
+        textChunks('continued reply'),
+      ]);
+      const registry = new ToolRegistry();
+      const created: AgentSession[] = [];
+      const createSession = (initialMessages?: Message[], sessionId?: string): AgentSession => {
+        const options: ConstructorParameters<typeof AgentSession>[0] = { provider, registry };
+        if (initialMessages !== undefined) {
+          options.initialMessages = initialMessages;
+        }
+        if (sessionId !== undefined) {
+          options.id = sessionId;
+        }
+        const next = new AgentSession(options);
+        created.push(next);
+        return next;
+      };
+      const first = createSession();
+
+      const { input, output, text } = captureStreams();
+      const replDone = runRepl({ session: first, input, output, store, createSession });
+      input.write('fix the login bug\n');
+      input.write('/new\n');
+      input.write('write unit tests\n');
+      input.write('/open ghost\n');
+      input.write(`/open ${first.id}\n`);
+      input.write('continue fixing\n');
+      input.write('/sessions\n');
+      input.write('/exit\n');
+      input.end();
+      await replDone;
+
+      const out = text();
+      expect(out).toContain('Started new session');
+      expect(out).toContain('Session "ghost" not found');
+      expect(out).toContain(`Opened session ${first.id}`);
+
+      // 工厂被调用两次：/new（无历史）与 /open（携带 2 条历史）。
+      expect(created).toHaveLength(3);
+      // /open 重建的会话保留原 ID，后续轮次写回同一存档文件。
+      expect(created[2]?.id).toBe(first.id);
+
+      // 只有两个存档文件；恢复的会话累积了 4 条消息并带标题。
+      const summaries = await store.list();
+      expect(summaries.map((s) => s.id).sort()).toEqual([created[1]?.id ?? '', first.id].sort());
+      const reopened = await store.load(first.id);
+      expect(reopened?.messages).toHaveLength(4);
+      expect(reopened?.title).toBe('fix the login bug');
+
+      // /sessions 用 * 标记当前（恢复后的）会话。
+      expect(out).toContain(`* ${first.id}`);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('/delete 删除存档会话；当前会话不可删除', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cy-multi-session-'));
+    try {
+      const store = new JsonFileSessionStore(dir);
+      const provider = new MockProvider([textChunks('hi')]);
+      const registry = new ToolRegistry();
+      const createSession = (initialMessages?: Message[], sessionId?: string): AgentSession => {
+        const options: ConstructorParameters<typeof AgentSession>[0] = { provider, registry };
+        if (initialMessages !== undefined) {
+          options.initialMessages = initialMessages;
+        }
+        if (sessionId !== undefined) {
+          options.id = sessionId;
+        }
+        return new AgentSession(options);
+      };
+      const first = createSession();
+
+      const { input, output, text } = captureStreams();
+      const replDone = runRepl({ session: first, input, output, store, createSession });
+      input.write('hello\n');
+      input.write('/new\n');
+      input.write(`/delete ${first.id}\n`);
+      input.write('/delete missing\n');
+      input.write('/exit\n');
+      input.end();
+      await replDone;
+
+      const out = text();
+      expect(out).toContain(`Deleted session ${first.id}`);
+      expect(await store.load(first.id)).toBeNull();
+      // /delete missing 对不存在的会话静默成功（fs.rm force 语义）。
+      expect(out).toContain('Deleted session missing');
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('活动会话不允许被 /delete 移除', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cy-multi-session-'));
+    try {
+      const store = new JsonFileSessionStore(dir);
+      const provider = new MockProvider([textChunks('hi')]);
+      const session = new AgentSession({ provider, registry: new ToolRegistry() });
+
+      const { input, output, text } = captureStreams();
+      const replDone = runRepl({ session, input, output, store });
+      input.write('hello\n');
+      input.write(`/delete ${session.id}\n`);
+      input.write('/exit\n');
+      input.end();
+      await replDone;
+
+      expect(text()).toContain('Cannot delete the active session');
+      expect(await store.load(session.id)).not.toBeNull();
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -67,13 +67,33 @@ async function main(): Promise<void> {
   if (initialMessages !== undefined) {
     sessionOptions.initialMessages = initialMessages;
   }
+  if (config.resume !== undefined) {
+    // 保留原会话 ID，后续每轮存档写回同一文件。
+    sessionOptions.id = config.resume;
+  }
   const session = new AgentSession(sessionOptions);
+
+  // 会话工厂：/new 与 /open 用它重建会话（systemPrompt 重新注入）。
+  const createSession = (messages?: Message[], sessionId?: string): AgentSession => {
+    const options: ConstructorParameters<typeof AgentSession>[0] = {
+      provider,
+      registry,
+      systemPrompt: SYSTEM_PROMPT,
+    };
+    if (messages !== undefined) {
+      options.initialMessages = messages;
+    }
+    if (sessionId !== undefined) {
+      options.id = sessionId;
+    }
+    return new AgentSession(options);
+  };
 
   process.stdout.write(`cy-agent · model: ${config.model} · cwd: ${config.cwd}\n`);
   if (config.resume !== undefined) {
     process.stdout.write(`Resumed session ${config.resume} (${initialMessages?.length ?? 0} messages)\n`);
   }
-  await runRepl({ session, color: process.stdout.isTTY === true, store });
+  await runRepl({ session, color: process.stdout.isTTY === true, store, createSession });
 }
 
 main().catch((error: unknown) => {

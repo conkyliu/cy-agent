@@ -36,6 +36,15 @@ function session(provider: ProviderContract, registry: ToolRegistry): AgentSessi
 }
 
 describe('AgentSession', () => {
+  it('honors a provided session id for archive continuity', () => {
+    const provider = new MockProvider([]);
+    const agent = new AgentSession({ provider, registry: new ToolRegistry(), id: 'archived-1' });
+    expect(agent.id).toBe('archived-1');
+    const generated = new AgentSession({ provider, registry: new ToolRegistry() });
+    expect(generated.id.length).toBeGreaterThan(0);
+    expect(generated.id).not.toBe('archived-1');
+  });
+
   it('completes with pure text and emits ordered events', async () => {
     const provider = new MockProvider([[...textChunks('Hello, '), ...textChunks('world!')]]);
     const registry = new ToolRegistry();

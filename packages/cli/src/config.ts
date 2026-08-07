@@ -31,7 +31,10 @@ Options:
 
 REPL commands:
   /exit, /quit        Leave the REPL
-  /sessions           List saved sessions
+  /sessions           List saved sessions (* marks the active one)
+  /new                Save the current session and start a new one
+  /open <id>          Save the current session and open a saved one
+  /delete <id>        Delete a saved session (not the active one)
   Ctrl-C (running)    Cancel the current turn
 `;
 

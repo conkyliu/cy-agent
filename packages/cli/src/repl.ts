@@ -1,7 +1,8 @@
 import { createInterface, type Interface } from 'node:readline/promises';
 import process from 'node:process';
 import type { AgentSession } from '@cy-agent/agent';
-import type { SessionStore } from '@cy-agent/storage';
+import type { Message } from '@cy-agent/protocol';
+import type { SessionStore, StoredSession } from '@cy-agent/storage';
 import { renderEvent } from './renderer.js';
 
 /**
@@ -25,8 +26,11 @@ export interface ReplOptions {
   color?: boolean;
   /** 提示语，默认 "> "。 */
   prompt?: string;
-  /** 会话持久化存储；提供时每轮结束后自动保存，并启用 /sessions 命令。 */
+  /** 会话持久化存储；提供时每轮结束后自动保存，并启用会话管理命令。 */
   store?: SessionStore;
+  /** 会话工厂：/new 与 /open 用它重建 AgentSession；未提供时禁用切换类命令。
+   * sessionId 用于 /open 保留原会话 ID，保证持久化文件连续。 */
+  createSession?: (initialMessages?: Message[], sessionId?: string) => AgentSession;
 }
 
 const EXIT_COMMANDS = new Set(['/exit', '/quit']);
@@ -84,11 +88,14 @@ export async function runRepl(options: ReplOptions): Promise<void> {
   });
   const reader = new LineReader(rl);
 
+  // 当前活动会话：/new 与 /open 会替换它。
+  let session = options.session;
+
   // SIGINT：运行中取消当前轮，空闲时退出。
   let cancelled = false;
   const onSigint = (): void => {
-    if (options.session.isRunning) {
-      options.session.cancel();
+    if (session.isRunning) {
+      session.cancel();
     } else {
       cancelled = true;
       rl.close();
@@ -113,19 +120,115 @@ export async function runRepl(options: ReplOptions): Promise<void> {
         break;
       }
       if (input === '/sessions') {
-        await listSessions(options.store, write);
+        await listSessions(options.store, session.id, write);
         write(prompt);
         continue;
       }
-      await runTurn(options.session, input, reader, write, color);
+      if (input === '/new') {
+        session = await startNewSession(options, session, write);
+        write(prompt);
+        continue;
+      }
+      if (input.startsWith('/open ')) {
+        session = await openSession(options, session, input.slice('/open '.length).trim(), write);
+        write(prompt);
+        continue;
+      }
+      if (input.startsWith('/delete ')) {
+        await deleteSession(options.store, session.id, input.slice('/delete '.length).trim(), write);
+        write(prompt);
+        continue;
+      }
+      await runTurn(session, input, reader, write, color);
       if (options.store !== undefined) {
-        await persistSession(options.session, options.store, write);
+        await persistSession(session, options.store, write);
       }
       write(prompt);
     }
   } finally {
     process.removeListener('SIGINT', onSigint);
     rl.close();
+  }
+}
+
+/** /new：先存档当前会话，再用工厂创建空会话。 */
+async function startNewSession(
+  options: ReplOptions,
+  current: AgentSession,
+  write: (text: string) => void,
+): Promise<AgentSession> {
+  if (options.createSession === undefined) {
+    write('Session switching is not available (no session factory).\n');
+    return current;
+  }
+  if (options.store !== undefined) {
+    await persistSession(current, options.store, write);
+  }
+  const next = options.createSession();
+  write(`Started new session ${next.id}.\n`);
+  return next;
+}
+
+/** /open <id>：先存档当前会话，再载入目标会话重建 AgentSession。 */
+async function openSession(
+  options: ReplOptions,
+  current: AgentSession,
+  targetId: string,
+  write: (text: string) => void,
+): Promise<AgentSession> {
+  if (options.createSession === undefined || options.store === undefined) {
+    write('Session switching is not available (no session factory or store).\n');
+    return current;
+  }
+  if (targetId.length === 0) {
+    write('Usage: /open <session-id>\n');
+    return current;
+  }
+  if (targetId === current.id) {
+    write(`Already in session ${targetId}.\n`);
+    return current;
+  }
+  let stored;
+  try {
+    stored = await options.store.load(targetId);
+  } catch (error) {
+    write(`✗ ${error instanceof Error ? error.message : String(error)}\n`);
+    return current;
+  }
+  if (stored === null) {
+    write(`Session "${targetId}" not found. Use /sessions to list saved sessions.\n`);
+    return current;
+  }
+  await persistSession(current, options.store, write);
+  const next = options.createSession(stored.messages, targetId);
+  write(`Opened session ${targetId} (${stored.messages.length} messages).\n`);
+  return next;
+}
+
+/** /delete <id>：删除存档会话；当前会话不允许删除。 */
+async function deleteSession(
+  store: SessionStore | undefined,
+  currentId: string,
+  targetId: string,
+  write: (text: string) => void,
+): Promise<void> {
+  if (store === undefined) {
+    write('Session persistence is not enabled.\n');
+    return;
+  }
+  if (targetId.length === 0) {
+    write('Usage: /delete <session-id>\n');
+    return;
+  }
+  if (targetId === currentId) {
+    write('Cannot delete the active session. Start a new one first (/new).\n');
+    return;
+  }
+  try {
+    await store.delete(targetId);
+    write(`Deleted session ${targetId}.\n`);
+  } catch (error) {
+    write(`✗ ${error instanceof Error ? error.message : String(error)}\n`);
   }
 }
 
@@ -157,6 +260,19 @@ async function runTurn(
   write('\n');
 }
 
+/** 从首条用户消息派生会话标题（压缩空白、截断 60 字符）。 */
+function deriveTitle(messages: readonly Message[]): string | undefined {
+  const firstUser = messages.find((message) => message.role === 'user' && typeof message.content === 'string');
+  if (firstUser === undefined || typeof firstUser.content !== 'string') {
+    return undefined;
+  }
+  const collapsed = firstUser.content.replace(/\s+/g, ' ').trim();
+  if (collapsed.length === 0) {
+    return undefined;
+  }
+  return collapsed.length > 60 ? `${collapsed.slice(0, 59)}…` : collapsed;
+}
+
 /** 保存当前会话的非 system 消息；保存失败仅提示不中断 REPL。 */
 async function persistSession(
   session: AgentSession,
@@ -165,7 +281,16 @@ async function persistSession(
 ): Promise<void> {
   try {
     const messages = session.getMessages().filter((message) => message.role !== 'system');
-    await store.save({ id: session.id, updatedAt: new Date().toISOString(), messages });
+    const stored: StoredSession = {
+      id: session.id,
+      updatedAt: new Date().toISOString(),
+      messages,
+    };
+    const title = deriveTitle(messages);
+    if (title !== undefined) {
+      stored.title = title;
+    }
+    await store.save(stored);
   } catch (error) {
     write(`⚠ Failed to persist session: ${error instanceof Error ? error.message : String(error)}\n`);
   }
@@ -173,6 +298,7 @@ async function persistSession(
 
 async function listSessions(
   store: SessionStore | undefined,
+  currentId: string,
   write: (text: string) => void,
 ): Promise<void> {
   if (store === undefined) {
@@ -185,6 +311,8 @@ async function listSessions(
     return;
   }
   for (const summary of summaries.slice(0, 10)) {
-    write(`${summary.id}  ${summary.updatedAt}  (${summary.messageCount} messages)\n`);
+    const marker = summary.id === currentId ? '*' : ' ';
+    const title = summary.title ?? '(untitled)';
+    write(`${marker} ${summary.id}  ${title}  ${summary.updatedAt}  (${summary.messageCount} messages)\n`);
   }
 }
