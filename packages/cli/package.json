@@ -21,6 +21,7 @@
     "@cy-agent/agent": "workspace:*",
     "@cy-agent/openai-provider": "workspace:*",
     "@cy-agent/protocol": "workspace:*",
+    "@cy-agent/storage": "workspace:*",
     "@cy-agent/tools": "workspace:*"
   }
 }

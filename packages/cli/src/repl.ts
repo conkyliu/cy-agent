@@ -1,6 +1,7 @@
 import { createInterface, type Interface } from 'node:readline/promises';
 import process from 'node:process';
 import type { AgentSession } from '@cy-agent/agent';
+import type { SessionStore } from '@cy-agent/storage';
 import { renderEvent } from './renderer.js';
 
 /**
@@ -24,6 +25,8 @@ export interface ReplOptions {
   color?: boolean;
   /** 提示语，默认 "> "。 */
   prompt?: string;
+  /** 会话持久化存储；提供时每轮结束后自动保存，并启用 /sessions 命令。 */
+  store?: SessionStore;
 }
 
 const EXIT_COMMANDS = new Set(['/exit', '/quit']);
@@ -109,7 +112,15 @@ export async function runRepl(options: ReplOptions): Promise<void> {
       if (EXIT_COMMANDS.has(input)) {
         break;
       }
+      if (input === '/sessions') {
+        await listSessions(options.store, write);
+        write(prompt);
+        continue;
+      }
       await runTurn(options.session, input, reader, write, color);
+      if (options.store !== undefined) {
+        await persistSession(options.session, options.store, write);
+      }
       write(prompt);
     }
   } finally {
@@ -144,4 +155,36 @@ async function runTurn(
     }
   }
   write('\n');
+}
+
+/** 保存当前会话的非 system 消息；保存失败仅提示不中断 REPL。 */
+async function persistSession(
+  session: AgentSession,
+  store: SessionStore,
+  write: (text: string) => void,
+): Promise<void> {
+  try {
+    const messages = session.getMessages().filter((message) => message.role !== 'system');
+    await store.save({ id: session.id, updatedAt: new Date().toISOString(), messages });
+  } catch (error) {
+    write(`⚠ Failed to persist session: ${error instanceof Error ? error.message : String(error)}\n`);
+  }
+}
+
+async function listSessions(
+  store: SessionStore | undefined,
+  write: (text: string) => void,
+): Promise<void> {
+  if (store === undefined) {
+    write('Session persistence is not enabled.\n');
+    return;
+  }
+  const summaries = await store.list();
+  if (summaries.length === 0) {
+    write('No saved sessions.\n');
+    return;
+  }
+  for (const summary of summaries.slice(0, 10)) {
+    write(`${summary.id}  ${summary.updatedAt}  (${summary.messageCount} messages)\n`);
+  }
 }

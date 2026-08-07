@@ -3,11 +3,17 @@ import type { AgentEvent, Message, ToolCall } from '@cy-agent/protocol';
 import type { ProviderContract } from './contracts/provider.js';
 import type { ToolRegistry } from './registry.js';
 import { autoApprovePolicy, type ToolExecutionPolicy } from './policy.js';
+import { DEFAULT_MAX_INPUT_TOKENS, trimToBudget, type ContextBudgetOptions } from './context/budget.js';
 
 export interface AgentSessionOptions {
   provider: ProviderContract;
   registry: ToolRegistry;
   systemPrompt?: string;
+  /**
+   * 恢复历史会话时的前置消息（追加在 system 消息之后）。
+   * 持久化层应只保存非 system 消息，避免与 systemPrompt 重复。
+   */
+  initialMessages?: Message[];
   /**
    * 工具执行策略。默认自动静默执行；
    * 为后续 Human-in-the-loop 预留的扩展点。
@@ -15,6 +21,8 @@ export interface AgentSessionOptions {
   policy?: ToolExecutionPolicy;
   /** 单轮会话内允许的最大模型请求次数，防止工具调用死循环。 */
   maxIterations?: number;
+  /** 上下文窗口预算；超预算时裁剪发送给模型的历史副本（内部历史不变）。 */
+  contextBudget?: ContextBudgetOptions;
 }
 
 /**
@@ -29,6 +37,7 @@ export class AgentSession {
   private readonly messages: Message[] = [];
   private readonly policy: ToolExecutionPolicy;
   private readonly maxIterations: number;
+  private readonly maxInputTokens: number;
   /** 正在等待宿主（CLI / UI）响应的授权请求：toolCallId -> settle 回调。 */
   private readonly pendingApprovals = new Map<string, (approved: boolean) => void>();
   private abortController: AbortController | null = null;
@@ -38,8 +47,15 @@ export class AgentSession {
     this.id = randomUUID();
     this.policy = options.policy ?? autoApprovePolicy;
     this.maxIterations = options.maxIterations ?? 20;
+    this.maxInputTokens = options.contextBudget?.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS;
     if (options.systemPrompt !== undefined) {
       this.messages.push({ id: randomUUID(), role: 'system', content: options.systemPrompt });
+    }
+    if (options.initialMessages !== undefined) {
+      for (const message of options.initialMessages) {
+        // 拷贝消息对象，防止外部持久化层与运行时共享引用。
+        this.messages.push({ ...message });
+      }
     }
   }
 
@@ -165,8 +181,18 @@ export class AgentSession {
     const pending = new Map<string, ToolCall>();
     const completed: ToolCall[] = [];
 
+    // 上下文预算：仅裁剪发送给模型的副本，内部历史保持完整。
+    const trimmed = trimToBudget(this.messages, this.maxInputTokens);
+    if (trimmed.removedMessages > 0) {
+      yield {
+        type: 'context_trimmed',
+        removedMessages: trimmed.removedMessages,
+        estimatedTokens: trimmed.estimatedTokens,
+      };
+    }
+
     const stream = this.options.provider.generateStream({
-      messages: [...this.messages],
+      messages: trimmed.messages,
       tools,
       signal,
     });

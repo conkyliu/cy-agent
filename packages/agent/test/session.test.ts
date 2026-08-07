@@ -349,4 +349,59 @@ describe('AgentSession HITL 授权', () => {
     // 迟到响应不应报错。
     expect(() => agent.resolveApproval('tc1', true)).not.toThrow();
   });
+
+  it('restores initial messages after the system prompt for session resume', async () => {
+    const provider = new MockProvider([textChunks('Continuing.')]);
+    const registry = new ToolRegistry();
+    const history: Message[] = [
+      { id: 'h1', role: 'user', content: 'earlier question' },
+      { id: 'h2', role: 'assistant', content: 'earlier answer' },
+    ];
+
+    const agent = new AgentSession({
+      provider,
+      registry,
+      systemPrompt: 'You are cy-agent.',
+      initialMessages: history,
+    });
+    const events = await drain(agent.run('follow up'));
+
+    expect(events[events.length - 1]?.type).toBe('session_completed');
+    // 首次模型请求必须携带 system + 历史 + 新用户消息。
+    const request = provider.requests[0];
+    expect(request?.messages.map((m) => m.role)).toEqual([
+      'system',
+      'user',
+      'assistant',
+      'user',
+    ]);
+    expect(request?.messages[1]?.content).toBe('earlier question');
+
+    // 运行时拷贝消息：篡改历史数组不应影响会话内部状态。
+    const firstHistory = history[0];
+    if (firstHistory) {
+      firstHistory.content = 'mutated';
+    }
+    expect(agent.getMessages().some((m) => m.content === 'mutated')).toBe(false);
+  });
+
+  it('trims context beyond budget and emits context_trimmed without losing internal history', async () => {
+    const provider = new MockProvider([textChunks('first answer'), textChunks('second answer')]);
+    const registry = new ToolRegistry();
+    const agent = new AgentSession({
+      provider,
+      registry,
+      contextBudget: { maxInputTokens: 10 },
+    });
+
+    await drain(agent.run('hello first turn'));
+    const events2 = await drain(agent.run('second turn'));
+
+    const trimmed = events2.find((e) => e.type === 'context_trimmed');
+    expect(trimmed).toMatchObject({ removedMessages: 2 });
+    // 内部历史完整保留（两轮 user + assistant）。
+    expect(agent.getMessages()).toHaveLength(4);
+    // 第二次请求只携带裁剪后的最新消息。
+    expect(provider.requests[1]?.messages.map((m) => m.content)).toEqual(['second turn']);
+  });
 });

@@ -10,12 +10,12 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^24",
     "typescript": "^5.5.4",
-    "vitest": "^2.1.9"
+    "vitest": "^4.1.10"
   },
-  "packageManager": "pnpm@7.9.0",
+  "packageManager": "pnpm@11.20.0",
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   }
 }

@@ -12,6 +12,8 @@ export interface CliConfig {
   baseUrl?: string;
   /** 编码工具沙箱根目录，默认当前工作目录。 */
   cwd: string;
+  /** 恢复指定会话 ID（可选）。 */
+  resume?: string;
 }
 
 export const HELP_TEXT = `cy-agent - interactive coding agent CLI
@@ -24,10 +26,12 @@ Options:
   --base-url=<url>    OpenAI-compatible API (env: CY_AGENT_BASE_URL)
   --api-key=<key>     API key               (env: CY_AGENT_API_KEY or OPENAI_API_KEY)
   --cwd=<dir>         Workspace directory   (default: process.cwd())
+  --resume=<id>       Resume a saved session (see /sessions)
   --help              Show this help
 
 REPL commands:
   /exit, /quit        Leave the REPL
+  /sessions           List saved sessions
   Ctrl-C (running)    Cancel the current turn
 `;
 
@@ -66,10 +70,14 @@ export function loadConfig(
   const model = pick(flags.get('model'), env.CY_AGENT_MODEL) ?? 'gpt-4o';
   const baseUrl = pick(flags.get('base-url'), env.CY_AGENT_BASE_URL);
   const workspace = pick(flags.get('cwd')) ?? cwd;
+  const resume = pick(flags.get('resume'));
 
   const config: CliConfig = { apiKey, model, cwd: workspace };
   if (baseUrl !== undefined) {
     config.baseUrl = baseUrl;
+  }
+  if (resume !== undefined) {
+    config.resume = resume;
   }
   return config;
 }

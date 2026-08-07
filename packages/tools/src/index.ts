@@ -10,3 +10,4 @@ export {
   type SearchFilesArgs,
 } from './coding-tools.js';
 export { resolveInWorkspace, SKIPPED_DIRECTORIES } from './workspace.js';
+export { createRunShellTool, type RunShellArgs } from './shell-tool.js';

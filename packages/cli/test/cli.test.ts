@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { ToolBase } from '@cy-agent/agent';
 import { AgentSession, ToolRegistry } from '@cy-agent/agent';
 import type { AgentEvent } from '@cy-agent/protocol';
+import { JsonFileSessionStore } from '@cy-agent/storage';
 import { MockProvider, textChunks, toolCallChunks } from '../../agent/test/fixtures.js';
 import { loadConfig, parseCliArgs } from '../src/config.js';
 import { preview, renderEvent } from '../src/renderer.js';
@@ -72,6 +76,10 @@ describe('renderEvent', () => {
 
     const cancelled = renderEvent({ type: 'session_cancelled' });
     expect(cancelled).toContain('cancelled');
+
+    const trimmed = renderEvent({ type: 'context_trimmed', removedMessages: 2, estimatedTokens: 128 });
+    expect(trimmed).toContain('trimmed');
+    expect(trimmed).toContain('2');
   });
 
   it('开启颜色时输出 ANSI 码，关闭时为纯文本', () => {
@@ -152,5 +160,65 @@ describe('runRepl（CLI 作为 HITL 授权宿主）', () => {
     expect(out).toContain('explicitly denied');
     expect(out).toContain('All done.');
     expect(executed.count).toBe(0);
+  });
+});
+
+describe('runRepl 会话持久化', () => {
+  it('每轮结束自动保存非 system 消息，/sessions 可列出', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cy-repl-store-'));
+    try {
+      const store = new JsonFileSessionStore(dir);
+      const provider = new MockProvider([textChunks('Saved turn.')]);
+      const session = new AgentSession({
+        provider,
+        registry: new ToolRegistry(),
+        systemPrompt: 'System prompt should not be persisted.',
+      });
+
+      const input = new PassThrough();
+      const output = new PassThrough();
+      let captured = '';
+      output.on('data', (chunk: Buffer) => {
+        captured += chunk.toString();
+      });
+
+      const replDone = runRepl({ session, input, output, store });
+      input.write('hello\n');
+      input.write('/sessions\n');
+      input.write('/exit\n');
+      input.end();
+      await replDone;
+
+      // 磁盘上存在会话文件，且不含 system 消息。
+      const stored = await store.load(session.id);
+      expect(stored).not.toBeNull();
+      expect(stored?.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
+      expect(stored?.messages.some((m) => m.content?.includes('System prompt'))).toBe(false);
+
+      // /sessions 输出包含当前会话 ID。
+      expect(captured).toContain(session.id);
+      expect(captured).toContain('(2 messages)');
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('未提供 store 时 /sessions 提示未启用', async () => {
+    const provider = new MockProvider([textChunks('ok')]);
+    const session = new AgentSession({ provider, registry: new ToolRegistry() });
+    const input = new PassThrough();
+    const output = new PassThrough();
+    let captured = '';
+    output.on('data', (chunk: Buffer) => {
+      captured += chunk.toString();
+    });
+
+    const replDone = runRepl({ session, input, output });
+    input.write('/sessions\n');
+    input.write('/exit\n');
+    input.end();
+    await replDone;
+
+    expect(captured).toContain('not enabled');
   });
 });

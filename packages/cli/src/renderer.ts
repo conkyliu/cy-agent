@@ -56,6 +56,12 @@ export function renderEvent(event: AgentEvent, options: RenderOptions = {}): str
       return null;
     case 'text_chunk':
       return event.text;
+    case 'context_trimmed':
+      return paint(
+        `\n⋯ Context trimmed: removed ${event.removedMessages} message(s), ~${event.estimatedTokens} tokens remain\n`,
+        ANSI.dim,
+        color,
+      );
     case 'tool_approval_requested':
       return paint(
         `\n⚠ Approval required for "${event.name}"\n  args: ${preview(event.args)}\n`,
