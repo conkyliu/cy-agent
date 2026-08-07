@@ -80,6 +80,10 @@ describe('renderEvent', () => {
     const trimmed = renderEvent({ type: 'context_trimmed', removedMessages: 2, estimatedTokens: 128 });
     expect(trimmed).toContain('trimmed');
     expect(trimmed).toContain('2');
+
+    const compacted = renderEvent({ type: 'context_compacted', removedMessages: 5 });
+    expect(compacted).toContain('compacted');
+    expect(compacted).toContain('5');
   });
 
   it('开启颜色时输出 ANSI 码，关闭时为纯文本', () => {

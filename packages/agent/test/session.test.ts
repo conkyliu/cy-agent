@@ -392,6 +392,8 @@ describe('AgentSession HITL 授权', () => {
       provider,
       registry,
       contextBudget: { maxInputTokens: 10 },
+      // 显式关闭压缩，单独验证裁剪路径。
+      compaction: { enabled: false },
     });
 
     await drain(agent.run('hello first turn'));
@@ -403,5 +405,66 @@ describe('AgentSession HITL 授权', () => {
     expect(agent.getMessages()).toHaveLength(4);
     // 第二次请求只携带裁剪后的最新消息。
     expect(provider.requests[1]?.messages.map((m) => m.content)).toEqual(['second turn']);
+  });
+
+  it('compacts old history into a summary message when the budget threshold is crossed', async () => {
+    const provider = new MockProvider([
+      textChunks('first answer'),
+      // 第二次 run 触发的摘要请求。
+      textChunks('User asked a question; assistant answered.'),
+      textChunks('second answer'),
+    ]);
+    const registry = new ToolRegistry();
+    const agent = new AgentSession({
+      provider,
+      registry,
+      contextBudget: { maxInputTokens: 60 },
+      compaction: { threshold: 0.4, keepRecentUnits: 1 },
+    });
+
+    await drain(agent.run('first question with enough words to count'));
+    const events2 = await drain(agent.run('second question'));
+
+    const compacted = events2.find((e) => e.type === 'context_compacted');
+    expect(compacted).toMatchObject({ removedMessages: 2 });
+    // 内部历史被原地替换：摘要 + 新 user + 新 assistant。
+    const messages = agent.getMessages();
+    expect(messages).toHaveLength(3);
+    expect(messages[0]?.role).toBe('user');
+    expect(messages[0]?.content).toContain('[Context Summary]');
+    // 摘要请求只携带转录本，主请求携带摘要 + 最新消息。
+    expect(provider.requests[1]?.messages).toHaveLength(1);
+    expect(provider.requests[1]?.messages[0]?.content).toContain('first question');
+    expect(provider.requests[2]?.messages).toHaveLength(2);
+    expect(provider.requests[2]?.messages[0]?.content).toContain('[Context Summary]');
+    expect(provider.requests[2]?.messages[1]?.content).toBe('second question');
+  });
+
+  it('falls back to trimming when summarization fails', async () => {
+    const provider = new MockProvider([
+      textChunks('first answer'),
+      // 摘要请求失败：generateStream 抛出 Provider 级错误。
+      () => {
+        throw new Error('summarization unavailable');
+      },
+      textChunks('second answer'),
+    ]);
+    const registry = new ToolRegistry();
+    const agent = new AgentSession({
+      provider,
+      registry,
+      contextBudget: { maxInputTokens: 10 },
+      compaction: { keepRecentUnits: 1 },
+    });
+
+    await drain(agent.run('hello first turn'));
+    const events2 = await drain(agent.run('second turn'));
+
+    // 压缩失败不中断会话：回退到裁剪并正常完成。
+    expect(events2.some((e) => e.type === 'context_compacted')).toBe(false);
+    expect(events2.find((e) => e.type === 'context_trimmed')).toBeTruthy();
+    expect(events2[events2.length - 1]?.type).toBe('session_completed');
+    // 内部历史保持完整（压缩未生效）。
+    expect(agent.getMessages()).toHaveLength(4);
   });
 });

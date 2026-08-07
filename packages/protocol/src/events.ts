@@ -8,6 +8,7 @@ export type AgentEvent =
   | { type: 'session_started'; sessionId: string }
   | { type: 'text_chunk'; text: string }
   | { type: 'context_trimmed'; removedMessages: number; estimatedTokens: number }
+  | { type: 'context_compacted'; removedMessages: number }
   | { type: 'tool_approval_requested'; toolCallId: string; name: string; args: unknown }
   | { type: 'tool_execution_started'; toolCallId: string; name: string; args: unknown }
   | { type: 'tool_execution_completed'; toolCallId: string; result: unknown }

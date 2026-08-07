@@ -3,7 +3,15 @@ import type { AgentEvent, Message, ToolCall } from '@cy-agent/protocol';
 import type { ProviderContract } from './contracts/provider.js';
 import type { ToolRegistry } from './registry.js';
 import { autoApprovePolicy, type ToolExecutionPolicy } from './policy.js';
-import { DEFAULT_MAX_INPUT_TOKENS, trimToBudget, type ContextBudgetOptions } from './context/budget.js';
+import { DEFAULT_MAX_INPUT_TOKENS, buildUnits, estimateMessagesTokens, trimToBudget, type ContextBudgetOptions } from './context/budget.js';
+import {
+  buildTranscript,
+  createSummaryMessage,
+  DEFAULT_COMPACTION_THRESHOLD,
+  DEFAULT_KEEP_RECENT_UNITS,
+  SUMMARIZATION_PROMPT,
+  type CompactionOptions,
+} from './context/compaction.js';
 
 export interface AgentSessionOptions {
   provider: ProviderContract;
@@ -23,6 +31,8 @@ export interface AgentSessionOptions {
   maxIterations?: number;
   /** 上下文窗口预算；超预算时裁剪发送给模型的历史副本（内部历史不变）。 */
   contextBudget?: ContextBudgetOptions;
+  /** LLM 驱动的上下文压缩；预算将满时先总结旧历史，失败回退裁剪。 */
+  compaction?: CompactionOptions;
 }
 
 /**
@@ -38,6 +48,9 @@ export class AgentSession {
   private readonly policy: ToolExecutionPolicy;
   private readonly maxIterations: number;
   private readonly maxInputTokens: number;
+  private readonly compactionEnabled: boolean;
+  private readonly compactionThreshold: number;
+  private readonly keepRecentUnits: number;
   /** 正在等待宿主（CLI / UI）响应的授权请求：toolCallId -> settle 回调。 */
   private readonly pendingApprovals = new Map<string, (approved: boolean) => void>();
   private abortController: AbortController | null = null;
@@ -48,6 +61,9 @@ export class AgentSession {
     this.policy = options.policy ?? autoApprovePolicy;
     this.maxIterations = options.maxIterations ?? 20;
     this.maxInputTokens = options.contextBudget?.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS;
+    this.compactionEnabled = options.compaction?.enabled ?? true;
+    this.compactionThreshold = options.compaction?.threshold ?? DEFAULT_COMPACTION_THRESHOLD;
+    this.keepRecentUnits = options.compaction?.keepRecentUnits ?? DEFAULT_KEEP_RECENT_UNITS;
     if (options.systemPrompt !== undefined) {
       this.messages.push({ id: randomUUID(), role: 'system', content: options.systemPrompt });
     }
@@ -103,6 +119,16 @@ export class AgentSession {
         if (signal.aborted) {
           yield { type: 'session_cancelled' };
           return;
+        }
+
+        // 上下文压缩：预算将满时先尝试 LLM 总结旧历史，失败则回退到裁剪。
+        const compactedCount = await this.compactIfNeeded(signal);
+        if (signal.aborted) {
+          yield { type: 'session_cancelled' };
+          return;
+        }
+        if (compactedCount > 0) {
+          yield { type: 'context_compacted', removedMessages: compactedCount };
         }
 
         const tools = this.options.registry.snapshot();
@@ -335,6 +361,76 @@ export class AgentSession {
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
       interrupted: true,
     });
+  }
+
+  /**
+   * 预算将满时压缩旧历史：
+   * 保留受保护单元（原始 systemPrompt）与最近 keepRecentUnits 个单元，
+   * 将中间的消息交给 Provider 总结为一条摘要消息并原地替换。
+   * 任何失败（Provider 报错、空摘要、取消）都返回 0，由后续裁剪兜底。
+   * @returns 被压缩移除的消息条数
+   */
+  private async compactIfNeeded(signal: AbortSignal): Promise<number> {
+    if (!this.compactionEnabled) {
+      return 0;
+    }
+    const thresholdTokens = Math.floor(this.maxInputTokens * this.compactionThreshold);
+    if (estimateMessagesTokens(this.messages) <= thresholdTokens) {
+      return 0;
+    }
+
+    const units = buildUnits(this.messages);
+    const endIndex = units.length - this.keepRecentUnits;
+    let startIndex = 0;
+    // 跳过受保护单元（原始 systemPrompt 永不压缩）。
+    while (startIndex < endIndex && units[startIndex]?.protected === true) {
+      startIndex += 1;
+    }
+    // 可压缩单元不足两条时收益太低，不值得一次额外的模型请求。
+    if (endIndex - startIndex < 2) {
+      return 0;
+    }
+
+    const countBefore = units.slice(0, startIndex).reduce((sum, unit) => sum + unit.messages.length, 0);
+    const toSummarize = units.slice(startIndex, endIndex).flatMap((unit) => unit.messages);
+
+    let summary: string;
+    try {
+      summary = await this.generateSummary(toSummarize, signal);
+    } catch {
+      // 压缩失败不是致命异常：回退到预算裁剪，会话继续。
+      return 0;
+    }
+    if (signal.aborted || summary.length === 0) {
+      return 0;
+    }
+
+    this.messages.splice(countBefore, toSummarize.length, createSummaryMessage(summary));
+    return toSummarize.length;
+  }
+
+  /** 调用 Provider 生成历史摘要，仅收集文本 chunk。 */
+  private async generateSummary(target: readonly Message[], signal: AbortSignal): Promise<string> {
+    let text = '';
+    const stream = this.options.provider.generateStream({
+      messages: [
+        {
+          id: randomUUID(),
+          role: 'user',
+          content: `${SUMMARIZATION_PROMPT}\n\n${buildTranscript(target)}`,
+        },
+      ],
+      signal,
+    });
+    for await (const chunk of stream) {
+      if (signal.aborted) {
+        break;
+      }
+      if (chunk.type === 'text') {
+        text += chunk.text;
+      }
+    }
+    return text.trim();
   }
 }
 

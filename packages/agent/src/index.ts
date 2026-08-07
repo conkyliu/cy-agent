@@ -13,3 +13,12 @@ export {
   type ContextBudgetOptions,
   type TrimResult,
 } from './context/budget.js';
+export {
+  buildTranscript,
+  createSummaryMessage,
+  DEFAULT_COMPACTION_THRESHOLD,
+  DEFAULT_KEEP_RECENT_UNITS,
+  SUMMARIZATION_PROMPT,
+  SUMMARY_MARKER,
+  type CompactionOptions,
+} from './context/compaction.js';

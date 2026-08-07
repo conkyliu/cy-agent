@@ -62,6 +62,12 @@ export function renderEvent(event: AgentEvent, options: RenderOptions = {}): str
         ANSI.dim,
         color,
       );
+    case 'context_compacted':
+      return paint(
+        `\n⋯ Context compacted: summarized ${event.removedMessages} message(s) into a brief summary\n`,
+        ANSI.dim,
+        color,
+      );
     case 'tool_approval_requested':
       return paint(
         `\n⚠ Approval required for "${event.name}"\n  args: ${preview(event.args)}\n`,
