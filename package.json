@@ -1,0 +1,21 @@
+{
+  "name": "cy-agent",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Headless agent runtime monorepo",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
+  },
+  "packageManager": "pnpm@7.9.0",
+  "engines": {
+    "node": ">=18"
+  }
+}

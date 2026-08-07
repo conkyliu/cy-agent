@@ -1,0 +1,19 @@
+{
+  "name": "@cy-agent/agent",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Headless agent runtime core: provider contract, tool registry, agent loop",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@cy-agent/protocol": "workspace:*"
+  }
+}

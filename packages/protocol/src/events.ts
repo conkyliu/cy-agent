@@ -1,0 +1,16 @@
+/**
+ * Agent 事件协议：UI/CLI 层通过消费此单向事件流渲染界面。
+ */
+
+import type { Message } from './messages.js';
+
+export type AgentEvent =
+  | { type: 'session_started'; sessionId: string }
+  | { type: 'text_chunk'; text: string }
+  | { type: 'tool_approval_requested'; toolCallId: string; name: string; args: unknown }
+  | { type: 'tool_execution_started'; toolCallId: string; name: string; args: unknown }
+  | { type: 'tool_execution_completed'; toolCallId: string; result: unknown }
+  | { type: 'tool_execution_failed'; toolCallId: string; error: string }
+  | { type: 'session_completed'; finalMessages: Message[] }
+  | { type: 'session_cancelled' }
+  | { type: 'session_error'; error: Error };

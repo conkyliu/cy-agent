@@ -1,0 +1,16 @@
+{
+  "name": "@cy-agent/protocol",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Shared message and event protocol for the agent runtime",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

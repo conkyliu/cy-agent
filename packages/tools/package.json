@@ -1,0 +1,20 @@
+{
+  "name": "@cy-agent/tools",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Built-in coding tools: file read/write, directory listing, content search",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@cy-agent/agent": "workspace:*",
+    "@cy-agent/protocol": "workspace:*"
+  }
+}
