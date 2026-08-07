@@ -9,6 +9,7 @@ export default defineConfig({
       '@cy-agent/protocol': here('./packages/protocol/src/index.ts'),
       '@cy-agent/agent': here('./packages/agent/src/index.ts'),
       '@cy-agent/tools': here('./packages/tools/src/index.ts'),
+      '@cy-agent/openai-provider': here('./packages/openai-provider/src/index.ts'),
     },
   },
   test: {

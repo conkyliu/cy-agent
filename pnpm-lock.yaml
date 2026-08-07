@@ -18,6 +18,14 @@ importers:
     dependencies:
       '@cy-agent/protocol': link:../protocol
 
+  packages/openai-provider:
+    specifiers:
+      '@cy-agent/agent': workspace:*
+      '@cy-agent/protocol': workspace:*
+    dependencies:
+      '@cy-agent/agent': link:../agent
+      '@cy-agent/protocol': link:../protocol
+
   packages/protocol:
     specifiers: {}
 
