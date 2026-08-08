@@ -42,8 +42,16 @@ describe('JsonFileSessionStore', () => {
 
   it('list 按 updatedAt 倒序并跳过损坏文件', async () => {
     const store = setup();
-    await store.save({ id: 'old', updatedAt: '2026-01-01T00:00:00.000Z', messages: makeMessages(1) });
-    await store.save({ id: 'new', updatedAt: '2026-02-01T00:00:00.000Z', messages: makeMessages(2) });
+    await store.save({
+      id: 'old',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      messages: makeMessages(1),
+    });
+    await store.save({
+      id: 'new',
+      updatedAt: '2026-02-01T00:00:00.000Z',
+      messages: makeMessages(2),
+    });
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(path.join(dir, 'broken.json'), '{not valid json', 'utf8');
     await fs.writeFile(path.join(dir, 'notes.txt'), 'ignore me', 'utf8');
@@ -113,7 +121,12 @@ describe('JsonFileSessionStore', () => {
 
     await fs.writeFile(
       path.join(dir, 'badtitle.json'),
-      JSON.stringify({ id: 'badtitle', updatedAt: '2026-01-01T00:00:00.000Z', messages: [], title: 42 }),
+      JSON.stringify({
+        id: 'badtitle',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        messages: [],
+        title: 42,
+      }),
       'utf8',
     );
     expect(await store.load('badtitle')).toBeNull();

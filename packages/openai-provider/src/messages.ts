@@ -26,7 +26,11 @@ export function toOpenAIMessages(messages: readonly Message[]): OpenAIMessageWir
         tool_call_id: message.toolCallId ?? '',
       };
     }
-    if (message.role === 'assistant' && message.toolCalls !== undefined && message.toolCalls.length > 0) {
+    if (
+      message.role === 'assistant' &&
+      message.toolCalls !== undefined &&
+      message.toolCalls.length > 0
+    ) {
       return {
         role: 'assistant',
         content: message.content ?? '',

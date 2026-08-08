@@ -14,6 +14,7 @@ export interface ToolBase {
   parameters: Record<string, unknown>;
   /** 是否需要用户显式授权（如：写入文件、执行 Shell） */
   requiresApproval?: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- 有意设计：any 保证泛型工具的双向可赋值性
   execute(args: any, signal?: AbortSignal): Promise<any>;
 }
 

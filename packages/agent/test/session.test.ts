@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentEvent, Message } from '@cy-agent/protocol';
-import { AgentSession, ToolRegistry, type ProviderContract, type ToolContract } from '../src/index.js';
+import {
+  AgentSession,
+  ToolRegistry,
+  type ProviderContract,
+  type ToolContract,
+} from '../src/index.js';
 import { MockProvider, textChunks, toolCallChunks } from './fixtures.js';
 
 const echoTool: ToolContract<{ text: string }, string> = {
@@ -52,7 +57,9 @@ describe('AgentSession', () => {
     const events = await drain(session(provider, registry).run('hi'));
 
     expect(events[0]?.type).toBe('session_started');
-    const texts = events.filter((e) => e.type === 'text_chunk').map((e) => (e as { text: string }).text);
+    const texts = events
+      .filter((e) => e.type === 'text_chunk')
+      .map((e) => (e as { text: string }).text);
     expect(texts).toEqual(['Hello, ', 'world!']);
     const last = events[events.length - 1];
     expect(last?.type).toBe('session_completed');
@@ -141,10 +148,7 @@ describe('AgentSession', () => {
   });
 
   it('reports unknown tools back to the LLM as errors', async () => {
-    const provider = new MockProvider([
-      toolCallChunks('tc1', 'ghost', {}),
-      textChunks('ok'),
-    ]);
+    const provider = new MockProvider([toolCallChunks('tc1', 'ghost', {}), textChunks('ok')]);
     const registry = new ToolRegistry();
 
     const events = await drain(session(provider, registry).run('call ghost'));
@@ -157,6 +161,7 @@ describe('AgentSession', () => {
   it('emits session_error on provider-level failures', async () => {
     const provider: ProviderContract = {
       name: 'broken',
+      // eslint-disable-next-line require-yield -- 故意不 yield，模拟 provider 层抛错
       async *generateStream() {
         throw new Error('Invalid API key');
       },
@@ -362,11 +367,17 @@ describe('AgentSession HITL 授权', () => {
     expect(events[events.length - 1]?.type).toBe('session_completed');
 
     // 拒绝结果必须交还 LLM（第二轮请求携带 tool 消息）。
-    expect(provider.requests[1]?.messages.some((m) => m.role === 'tool' && m.content?.includes('denied'))).toBe(true);
+    expect(
+      provider.requests[1]?.messages.some(
+        (m) => m.role === 'tool' && m.content?.includes('denied'),
+      ),
+    ).toBe(true);
   });
 
   it('cancels while waiting for approval without leaking the deferred', async () => {
-    const provider = new MockProvider([toolCallChunks('tc1', 'write_file', { path: '/tmp/a.txt' })]);
+    const provider = new MockProvider([
+      toolCallChunks('tc1', 'write_file', { path: '/tmp/a.txt' }),
+    ]);
     const registry = new ToolRegistry();
     registry.register(writeFileTool);
     const agent = session(provider, registry);
@@ -404,12 +415,7 @@ describe('AgentSession HITL 授权', () => {
     expect(events[events.length - 1]?.type).toBe('session_completed');
     // 首次模型请求必须携带 system + 历史 + 新用户消息。
     const request = provider.requests[0];
-    expect(request?.messages.map((m) => m.role)).toEqual([
-      'system',
-      'user',
-      'assistant',
-      'user',
-    ]);
+    expect(request?.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
     expect(request?.messages[1]?.content).toBe('earlier question');
 
     // 运行时拷贝消息：篡改历史数组不应影响会话内部状态。

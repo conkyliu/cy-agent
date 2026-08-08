@@ -6,7 +6,7 @@ import { OpenAICompatProvider } from '@cy-agent/openai-provider';
 interface CapturedRequest {
   url: string;
   init: RequestInit;
-  body: Record<string, any>;
+  body: Record<string, unknown>;
 }
 
 /** 构造返回 SSE 流的假 fetch，并捕获请求。 */
@@ -55,7 +55,7 @@ const echoTool: ToolBase = {
   name: 'echo',
   description: 'Echo text',
   parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
-  async execute(args: any) {
+  async execute(args: { text: string }) {
     return `echo: ${args.text}`;
   },
 };
@@ -91,9 +91,19 @@ describe('OpenAICompatProvider', () => {
 
   it('assembles streamed tool calls and converts messages/tools to wire format', async () => {
     const { fetchImpl, captured } = mockFetch([
-      { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'echo', arguments: '' } }] } }] },
+      {
+        choices: [
+          {
+            delta: {
+              tool_calls: [{ index: 0, id: 'call_1', function: { name: 'echo', arguments: '' } }],
+            },
+          },
+        ],
+      },
       { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"te' } }] } }] },
-      { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'xt":"hi"}' } }] } }] },
+      {
+        choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'xt":"hi"}' } }] } }],
+      },
       { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
     ]);
     const provider = new OpenAICompatProvider({ apiKey: 'sk-test', model: 'gpt-test', fetchImpl });
@@ -119,14 +129,27 @@ describe('OpenAICompatProvider', () => {
 
     const body = captured().body;
     expect(body.tools).toEqual([
-      { type: 'function', function: { name: 'echo', description: 'Echo text', parameters: echoTool.parameters } },
+      {
+        type: 'function',
+        function: { name: 'echo', description: 'Echo text', parameters: echoTool.parameters },
+      },
     ]);
     expect(body.messages[1]).toEqual({
       role: 'assistant',
       content: '',
-      tool_calls: [{ id: 'call_0', type: 'function', function: { name: 'echo', arguments: '{"text":"prev"}' } }],
+      tool_calls: [
+        {
+          id: 'call_0',
+          type: 'function',
+          function: { name: 'echo', arguments: '{"text":"prev"}' },
+        },
+      ],
     });
-    expect(body.messages[2]).toEqual({ role: 'tool', content: 'echo: prev', tool_call_id: 'call_0' });
+    expect(body.messages[2]).toEqual({
+      role: 'tool',
+      content: 'echo: prev',
+      tool_call_id: 'call_0',
+    });
   });
 
   it('requests include_usage and parses the trailing usage chunk', async () => {

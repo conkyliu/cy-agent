@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Message } from '@cy-agent/protocol';
-import { buildTranscript, createSummaryMessage, SUMMARY_MARKER } from '../src/context/compaction.js';
+import {
+  buildTranscript,
+  createSummaryMessage,
+  SUMMARY_MARKER,
+} from '../src/context/compaction.js';
 
 function msg(partial: Partial<Message> & Pick<Message, 'id' | 'role'>): Message {
   return { content: null, ...partial };

@@ -38,7 +38,11 @@ describe('loadConfig', () => {
   });
 
   it('兼容 OPENAI_API_KEY，并支持 --cwd 覆盖', () => {
-    const config = loadConfig({ OPENAI_API_KEY: 'oai' }, parseCliArgs(['--cwd=/repo']), '/elsewhere');
+    const config = loadConfig(
+      { OPENAI_API_KEY: 'oai' },
+      parseCliArgs(['--cwd=/repo']),
+      '/elsewhere',
+    );
     expect(config.apiKey).toBe('oai');
     expect(config.model).toBe('gpt-4o');
     expect(config.cwd).toBe('/repo');
@@ -53,9 +57,7 @@ describe('renderEvent', () => {
   it('text_chunk 原样输出，生命周期事件不渲染', () => {
     expect(renderEvent({ type: 'text_chunk', text: 'Hello' })).toBe('Hello');
     expect(renderEvent({ type: 'session_started', sessionId: 's1' })).toBeNull();
-    expect(
-      renderEvent({ type: 'session_completed', finalMessages: [] }),
-    ).toBeNull();
+    expect(renderEvent({ type: 'session_completed', finalMessages: [] })).toBeNull();
   });
 
   it('渲染工具执行与错误事件', () => {
@@ -68,7 +70,11 @@ describe('renderEvent', () => {
     expect(started).toContain('read_file');
     expect(started).toContain('"path":"a.ts"');
 
-    const failed = renderEvent({ type: 'tool_execution_failed', toolCallId: 'c1', error: 'Error: ENOENT' });
+    const failed = renderEvent({
+      type: 'tool_execution_failed',
+      toolCallId: 'c1',
+      error: 'Error: ENOENT',
+    });
     expect(failed).toContain('ENOENT');
 
     const error = renderEvent({ type: 'session_error', error: new Error('boom') });
@@ -77,7 +83,11 @@ describe('renderEvent', () => {
     const cancelled = renderEvent({ type: 'session_cancelled' });
     expect(cancelled).toContain('cancelled');
 
-    const trimmed = renderEvent({ type: 'context_trimmed', removedMessages: 2, estimatedTokens: 128 });
+    const trimmed = renderEvent({
+      type: 'context_trimmed',
+      removedMessages: 2,
+      estimatedTokens: 128,
+    });
     expect(trimmed).toContain('trimmed');
     expect(trimmed).toContain('2');
 

@@ -21,7 +21,8 @@ const MAX_OUTPUT_BYTES = 100_000;
  *
  * 安全边界：
  * - cwd 必须位于工作区沙箱内（resolveInWorkspace 防逃逸）。
- * - 超时杀进程（kill 'SIGKILL'），AbortSignal 取消同样杀进程。
+ * - 超时杀进程树（POSIX 用 kill 'SIGKILL'，Windows 用 taskkill /T /F），
+ *   AbortSignal 取消同样杀进程树。
  * - 输出超长截断；非零退出码不抛异常，格式化为结果交还 LLM 自我修正
  *   （遵循 spec 6.2：工具级错误严禁终止 Loop）。
  */
@@ -77,7 +78,12 @@ function runCommand(
     }
 
     const child: ChildProcessWithoutNullStreams = spawn(command, { cwd, shell: true });
-    const captured: Captured = { stdout: '', stderr: '', stdoutTruncated: false, stderrTruncated: false };
+    const captured: Captured = {
+      stdout: '',
+      stderr: '',
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    };
     let timedOut = false;
     let aborted = false;
     let settled = false;
@@ -101,12 +107,12 @@ function runCommand(
 
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill('SIGKILL');
+      killChild(child);
     }, timeoutMs);
 
     const onAbort = (): void => {
       aborted = true;
-      child.kill('SIGKILL');
+      killChild(child);
     };
     signal?.addEventListener('abort', onAbort, { once: true });
 
@@ -142,6 +148,32 @@ function runCommand(
       resolve(formatResult(code ?? 0, captured));
     });
   });
+}
+
+/**
+ * 杀掉子进程及其整棵进程树。
+ *
+ * Windows 下 shell:true 会先启动 cmd.exe，再派生实际的子孙进程；
+ * child.kill() 只能终止 cmd.exe 本身，孙进程仍持有 stdio 管道句柄，
+ * 导致 'close' 事件迟迟不触发。因此 Windows 上用 taskkill /T /F 杀整棵树。
+ */
+function killChild(child: ChildProcessWithoutNullStreams): void {
+  if (process.platform === 'win32') {
+    if (child.pid === undefined) {
+      child.kill('SIGKILL');
+      return;
+    }
+    const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    killer.on('error', () => {
+      // taskkill 不可用时退化为仅杀 shell 进程本身。
+      child.kill('SIGKILL');
+    });
+    return;
+  }
+  child.kill('SIGKILL');
 }
 
 function withTruncationNote(text: string, truncated: boolean): string {

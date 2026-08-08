@@ -3,7 +3,13 @@ import type { AgentEvent, Message, ToolCall } from '@cy-agent/protocol';
 import type { ProviderContract } from './contracts/provider.js';
 import type { ToolRegistry } from './registry.js';
 import { autoApprovePolicy, type ToolExecutionPolicy } from './policy.js';
-import { DEFAULT_MAX_INPUT_TOKENS, buildUnits, estimateMessagesTokens, trimToBudget, type ContextBudgetOptions } from './context/budget.js';
+import {
+  DEFAULT_MAX_INPUT_TOKENS,
+  buildUnits,
+  estimateMessagesTokens,
+  trimToBudget,
+  type ContextBudgetOptions,
+} from './context/budget.js';
 import {
   buildTranscript,
   createSummaryMessage,
@@ -164,7 +170,11 @@ export class AgentSession {
           yield { type: 'session_completed', finalMessages: [...this.messages] };
           // 提供商上报过用量时才发事件（部分兼容端点不返回 usage）。
           if (totalInputTokens > 0 || totalOutputTokens > 0) {
-            yield { type: 'usage_reported', inputTokens: totalInputTokens, outputTokens: totalOutputTokens };
+            yield {
+              type: 'usage_reported',
+              inputTokens: totalInputTokens,
+              outputTokens: totalOutputTokens,
+            };
           }
           return;
         }
@@ -289,7 +299,10 @@ export class AgentSession {
     return { text, toolCalls: completed, inputTokens, outputTokens };
   }
 
-  private async *executeTool(toolCall: ToolCall, signal: AbortSignal): AsyncGenerator<AgentEvent, void, unknown> {
+  private async *executeTool(
+    toolCall: ToolCall,
+    signal: AbortSignal,
+  ): AsyncGenerator<AgentEvent, void, unknown> {
     let args: unknown;
     try {
       args = toolCall.arguments.length > 0 ? JSON.parse(toolCall.arguments) : {};
@@ -320,7 +333,12 @@ export class AgentSession {
       if (tool.requiresApproval === true) {
         // 先创建 Deferred 再向外 yield 事件，保证宿主的同步响应不会丢失。
         const approval = this.createApproval(toolCall.id, signal);
-        yield { type: 'tool_approval_requested', toolCallId: toolCall.id, name: toolCall.name, args };
+        yield {
+          type: 'tool_approval_requested',
+          toolCallId: toolCall.id,
+          name: toolCall.name,
+          args,
+        };
         const userApproved = await approval;
         if (signal.aborted) {
           // 等待授权期间被取消：不追加任何结果，由外层统一处理。
@@ -414,7 +432,9 @@ export class AgentSession {
       return 0;
     }
 
-    const countBefore = units.slice(0, startIndex).reduce((sum, unit) => sum + unit.messages.length, 0);
+    const countBefore = units
+      .slice(0, startIndex)
+      .reduce((sum, unit) => sum + unit.messages.length, 0);
     const toSummarize = units.slice(startIndex, endIndex).flatMap((unit) => unit.messages);
 
     let summary: string;

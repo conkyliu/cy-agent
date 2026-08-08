@@ -6,6 +6,8 @@ import { createRunShellTool } from '@cy-agent/tools';
 
 describe('run_shell 工具', () => {
   let cwd: string;
+  // 测试命令需跨平台：Windows 下 shell:true 使用 cmd.exe，语法与 POSIX shell 不同。
+  const isWindows = process.platform === 'win32';
 
   afterEach(async () => {
     await fs.rm(cwd, { recursive: true, force: true });
@@ -30,7 +32,8 @@ describe('run_shell 工具', () => {
   it('非零退出码格式化为结果而非抛异常（交还 LLM 自我修正）', async () => {
     await setup();
     const tool = createRunShellTool(cwd);
-    const result = await tool.execute({ command: 'echo oops 1>&2; exit 3' });
+    const command = isWindows ? 'echo oops 1>&2 & exit 3' : 'echo oops 1>&2; exit 3';
+    const result = await tool.execute({ command });
     expect(result).toContain('Command failed with exit code 3');
     expect(result).toContain('[stderr]');
     expect(result).toContain('oops');
@@ -39,7 +42,7 @@ describe('run_shell 工具', () => {
   it('无输出的成功命令给出占位说明', async () => {
     await setup();
     const tool = createRunShellTool(cwd);
-    const result = await tool.execute({ command: 'true' });
+    const result = await tool.execute({ command: 'node -e "process.exit(0)"' });
     expect(result).toBe('(completed with no output)');
   });
 
@@ -47,7 +50,10 @@ describe('run_shell 工具', () => {
     await setup();
     await fs.mkdir(path.join(cwd, 'nested'));
     const tool = createRunShellTool(cwd);
-    const result = await tool.execute({ command: 'pwd', cwd: 'nested' });
+    const result = await tool.execute({
+      command: 'node -e "console.log(process.cwd())"',
+      cwd: 'nested',
+    });
     expect(result).toContain('nested');
   });
 
@@ -63,7 +69,10 @@ describe('run_shell 工具', () => {
     await setup();
     const tool = createRunShellTool(cwd);
     const started = Date.now();
-    const result = await tool.execute({ command: 'sleep 5', timeoutMs: 200 });
+    const result = await tool.execute({
+      command: 'node -e "setTimeout(function () {}, 60000)"',
+      timeoutMs: 200,
+    });
     expect(Date.now() - started).toBeLessThan(4000);
     expect(result).toContain('timed out after 200ms');
   });
@@ -72,7 +81,10 @@ describe('run_shell 工具', () => {
     await setup();
     const tool = createRunShellTool(cwd);
     const controller = new AbortController();
-    const pending = tool.execute({ command: 'sleep 5' }, controller.signal);
+    const pending = tool.execute(
+      { command: 'node -e "setTimeout(function () {}, 60000)"' },
+      controller.signal,
+    );
     setTimeout(() => controller.abort(), 100);
     const result = await pending;
     expect(result).toContain('was cancelled');

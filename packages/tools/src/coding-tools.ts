@@ -37,13 +37,18 @@ const MAX_SEARCH_FILE_BYTES = 1024 * 1024;
 export function createReadFileTool(cwd: string): ToolContract<ReadFileArgs, string> {
   return {
     name: 'read_file',
-    description: 'Read the contents of a text file in the workspace, optionally a 1-based line range.',
+    description:
+      'Read the contents of a text file in the workspace, optionally a 1-based line range.',
     parameters: {
       type: 'object',
       properties: {
         path: { type: 'string', description: 'File path relative to the workspace root' },
         startLine: { type: 'integer', minimum: 1, description: 'Optional 1-based start line' },
-        endLine: { type: 'integer', minimum: 1, description: 'Optional 1-based inclusive end line' },
+        endLine: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Optional 1-based inclusive end line',
+        },
       },
       required: ['path'],
     },
@@ -93,7 +98,10 @@ export function createListDirectoryTool(cwd: string): ToolContract<ListDirectory
     parameters: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Directory path relative to the workspace root, default "."' },
+        path: {
+          type: 'string',
+          description: 'Directory path relative to the workspace root, default "."',
+        },
       },
     },
     execute: async (args) => {
@@ -120,7 +128,10 @@ export function createSearchFilesTool(cwd: string): ToolContract<SearchFilesArgs
       properties: {
         pattern: { type: 'string', description: 'Regular expression pattern (without delimiters)' },
         path: { type: 'string', description: 'Root directory to search, default "."' },
-        include: { type: 'string', description: 'Only search files whose relative path contains this substring' },
+        include: {
+          type: 'string',
+          description: 'Only search files whose relative path contains this substring',
+        },
       },
       required: ['pattern'],
     },
@@ -194,7 +205,7 @@ async function collectFiles(root: string, signal?: AbortSignal): Promise<string[
     }
   };
 
-  await walk(root );
+  await walk(root);
   return files;
 }
 

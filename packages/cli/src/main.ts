@@ -52,7 +52,9 @@ async function main(): Promise<void> {
   if (config.resume !== undefined) {
     const stored = await store.load(config.resume);
     if (stored === null) {
-      process.stderr.write(`✗ Session "${config.resume}" not found. Use /sessions to list saved sessions.\n`);
+      process.stderr.write(
+        `✗ Session "${config.resume}" not found. Use /sessions to list saved sessions.\n`,
+      );
       process.exitCode = 1;
       return;
     }
@@ -91,12 +93,16 @@ async function main(): Promise<void> {
 
   process.stdout.write(`cy-agent · model: ${config.model} · cwd: ${config.cwd}\n`);
   if (config.resume !== undefined) {
-    process.stdout.write(`Resumed session ${config.resume} (${initialMessages?.length ?? 0} messages)\n`);
+    process.stdout.write(
+      `Resumed session ${config.resume} (${initialMessages?.length ?? 0} messages)\n`,
+    );
   }
   await runRepl({ session, color: process.stdout.isTTY === true, store, createSession });
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`Fatal: ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+  process.stderr.write(
+    `Fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`,
+  );
   process.exitCode = 1;
 });

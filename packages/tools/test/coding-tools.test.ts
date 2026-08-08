@@ -42,7 +42,9 @@ describe('coding tools', () => {
     await expect(read.execute({ path: 'a.txt' })).resolves.toBe('l1\nl2\nl3\nl4');
     await expect(read.execute({ path: 'a.txt', startLine: 2, endLine: 3 })).resolves.toBe('l2\nl3');
     await expect(read.execute({ path: 'missing.txt' })).rejects.toThrow(/ENOENT/);
-    await expect(read.execute({ path: 'a.txt', startLine: 3, endLine: 1 })).rejects.toThrow(/Invalid line range/);
+    await expect(read.execute({ path: 'a.txt', startLine: 3, endLine: 1 })).rejects.toThrow(
+      /Invalid line range/,
+    );
   });
 
   it('write_file creates nested directories and requires approval', async () => {
@@ -51,7 +53,9 @@ describe('coding tools', () => {
 
     const result = await write.execute({ path: 'nested/dir/b.txt', content: '你好 cy-agent' });
     expect(result).toMatch(/Wrote .* bytes to nested\/dir\/b.txt/);
-    await expect(readFile(path.join(cwd, 'nested/dir/b.txt'), 'utf8')).resolves.toBe('你好 cy-agent');
+    await expect(readFile(path.join(cwd, 'nested/dir/b.txt'), 'utf8')).resolves.toBe(
+      '你好 cy-agent',
+    );
   });
 
   it('list_directory lists sorted entries with type markers', async () => {
@@ -84,12 +88,18 @@ describe('coding tools', () => {
   });
 
   it('rejects paths escaping the workspace sandbox', async () => {
-    await expect(tool('read_file').execute({ path: '../outside.txt' })).rejects.toThrow(/escapes the workspace/);
+    await expect(tool('read_file').execute({ path: '../outside.txt' })).rejects.toThrow(
+      /escapes the workspace/,
+    );
     await expect(
       tool('write_file').execute({ path: '../../evil.txt', content: 'x' }),
     ).rejects.toThrow(/escapes the workspace/);
-    await expect(tool('list_directory').execute({ path: '..' })).rejects.toThrow(/escapes the workspace/);
-    await expect(tool('search_files').execute({ pattern: 'x', path: '..' })).rejects.toThrow(/escapes the workspace/);
+    await expect(tool('list_directory').execute({ path: '..' })).rejects.toThrow(
+      /escapes the workspace/,
+    );
+    await expect(tool('search_files').execute({ pattern: 'x', path: '..' })).rejects.toThrow(
+      /escapes the workspace/,
+    );
   });
 
   it('integrates with AgentSession end-to-end', async () => {

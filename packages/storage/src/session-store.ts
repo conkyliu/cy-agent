@@ -142,5 +142,9 @@ function parseSession(raw: string): StoredSession | null {
 }
 
 function isNotFound(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && (error as NodeJS.ErrnoException).code === 'ENOENT';
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as NodeJS.ErrnoException).code === 'ENOENT'
+  );
 }

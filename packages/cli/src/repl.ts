@@ -135,7 +135,12 @@ export async function runRepl(options: ReplOptions): Promise<void> {
         continue;
       }
       if (input.startsWith('/delete ')) {
-        await deleteSession(options.store, session.id, input.slice('/delete '.length).trim(), write);
+        await deleteSession(
+          options.store,
+          session.id,
+          input.slice('/delete '.length).trim(),
+          write,
+        );
         write(prompt);
         continue;
       }
@@ -262,7 +267,9 @@ async function runTurn(
 
 /** 从首条用户消息派生会话标题（压缩空白、截断 60 字符）。 */
 function deriveTitle(messages: readonly Message[]): string | undefined {
-  const firstUser = messages.find((message) => message.role === 'user' && typeof message.content === 'string');
+  const firstUser = messages.find(
+    (message) => message.role === 'user' && typeof message.content === 'string',
+  );
   if (firstUser === undefined || typeof firstUser.content !== 'string') {
     return undefined;
   }
@@ -292,7 +299,9 @@ async function persistSession(
     }
     await store.save(stored);
   } catch (error) {
-    write(`⚠ Failed to persist session: ${error instanceof Error ? error.message : String(error)}\n`);
+    write(
+      `⚠ Failed to persist session: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
   }
 }
 
@@ -313,6 +322,8 @@ async function listSessions(
   for (const summary of summaries.slice(0, 10)) {
     const marker = summary.id === currentId ? '*' : ' ';
     const title = summary.title ?? '(untitled)';
-    write(`${marker} ${summary.id}  ${title}  ${summary.updatedAt}  (${summary.messageCount} messages)\n`);
+    write(
+      `${marker} ${summary.id}  ${title}  ${summary.updatedAt}  (${summary.messageCount} messages)\n`,
+    );
   }
 }

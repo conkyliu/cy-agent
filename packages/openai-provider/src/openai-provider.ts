@@ -18,6 +18,22 @@ interface ToolCallAccumulator {
   ended: boolean;
 }
 
+/** SSE 流中 tool_calls 增量的最小结构（外部 JSON，字段均可能缺失）。 */
+interface SseToolCallDelta {
+  index?: number;
+  id?: string;
+  function?: { name?: string; arguments?: string };
+}
+
+/** Chat Completions SSE chunk 的最小结构。 */
+interface SseChunkPayload {
+  usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+  choices?: Array<{
+    delta?: { content?: unknown; tool_calls?: SseToolCallDelta[] };
+    finish_reason?: string;
+  }>;
+}
+
 /**
  * OpenAI 兼容流式提供商。
  *
@@ -102,17 +118,25 @@ export class OpenAICompatProvider implements ProviderContract {
             break;
           }
 
-          let payload: any;
+          let payload: SseChunkPayload;
           try {
-            payload = JSON.parse(data);
+            payload = JSON.parse(data) as SseChunkPayload;
           } catch {
             continue; // 容忍单行损坏的 JSON
           }
 
           // include_usage 时末尾会出现 choices 为空、仅带 usage 的统计 chunk。
           const usage = payload.usage;
-          if (usage && typeof usage.prompt_tokens === 'number' && typeof usage.completion_tokens === 'number') {
-            yield { type: 'usage', inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens };
+          if (
+            usage &&
+            typeof usage.prompt_tokens === 'number' &&
+            typeof usage.completion_tokens === 'number'
+          ) {
+            yield {
+              type: 'usage',
+              inputTokens: usage.prompt_tokens,
+              outputTokens: usage.completion_tokens,
+            };
           }
 
           const choice = payload.choices?.[0];
@@ -149,7 +173,7 @@ export class OpenAICompatProvider implements ProviderContract {
 
   private *applyToolCallDelta(
     accumulators: Map<number, ToolCallAccumulator>,
-    delta: any,
+    delta: SseToolCallDelta,
   ): Generator<ProviderChunk, void, unknown> {
     const index = typeof delta?.index === 'number' ? delta.index : 0;
     let entry = accumulators.get(index);
@@ -172,7 +196,10 @@ export class OpenAICompatProvider implements ProviderContract {
       if (entry.id.length === 0) {
         entry.id = `call_${index}`;
       }
-      yield { type: 'tool_call_start', toolCall: { id: entry.id, name: entry.name, arguments: '' } };
+      yield {
+        type: 'tool_call_start',
+        toolCall: { id: entry.id, name: entry.name, arguments: '' },
+      };
     }
 
     if (entry.started && fn && typeof fn.arguments === 'string' && fn.arguments.length > 0) {

@@ -77,7 +77,8 @@ export function buildUnits(messages: readonly Message[]): MessageUnit[] {
   for (const message of messages) {
     const last = current?.messages[current.messages.length - 1];
     // tool 消息跟随其 assistant(toolCalls) 或前一条 tool 结果，归入同一单元。
-    const continuesGroup = message.role === 'tool' && (last?.role === 'assistant' || last?.role === 'tool');
+    const continuesGroup =
+      message.role === 'tool' && (last?.role === 'assistant' || last?.role === 'tool');
 
     if (current === null || !continuesGroup) {
       current = { messages: [], tokens: 0, protected: false };
