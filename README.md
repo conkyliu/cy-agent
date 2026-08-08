@@ -15,6 +15,7 @@
 - **上下文预算管理**：启发式 token 估算 + 单元化裁剪，超限时自动裁剪发送副本（内部历史保持完整）
 - **LLM 驱动的上下文压缩**：超过阈值时由模型将历史总结为摘要消息，原地替换上下文，失败静默回退裁剪
 - **可中断**：通过 AbortController 全链路传播取消信号，随时安全中断会话
+- **Token 用量跟踪**：解析模型端点返回的真实 usage 统计，每轮会话结束后显示 `Tokens: N in / M out`
 - **OpenAI 兼容 Provider**：支持任意 OpenAI 兼容端点（可通过 `--base-url` 指定）
 
 ## 仓库结构
@@ -62,6 +63,23 @@ node packages/cli/dist/main.js --base-url <模型端点> --api-key <密钥> --mo
 
 # 恢复历史会话
 node packages/cli/dist/main.js --resume
+```
+
+参数支持环境变量回退，可写入 `~/.zshrc` 后免参启动：
+
+| 参数 | 环境变量 | 说明 |
+| --- | --- | --- |
+| `--base-url=<url>` | `CY_AGENT_BASE_URL` | OpenAI 兼容 API 端点 |
+| `--api-key=<key>` | `CY_AGENT_API_KEY` / `OPENAI_API_KEY` | API 密钥 |
+| `--model=<name>` | `CY_AGENT_MODEL` | 模型名（默认 gpt-4o） |
+
+### 全局命令
+
+通过 pnpm 软链接可将 CLI 注册为全局命令，之后在任意目录直接运行 `cy-agent`：
+
+```bash
+pnpm link --global ./packages/cli
+pnpm setup        # 将 pnpm 全局目录加入 PATH，重开终端生效
 ```
 
 REPL 常用命令：`/sessions` 查看会话列表、`/new` 新建会话、`/open <id>` 切换会话、`/delete <id>` 删除会话、`/exit` 退出。
