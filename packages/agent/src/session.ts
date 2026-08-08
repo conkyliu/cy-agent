@@ -116,6 +116,10 @@ export class AgentSession {
     this.messages.push({ id: randomUUID(), role: 'user', content: prompt });
     yield { type: 'session_started', sessionId: this.id };
 
+    // 本轮累计真实 token 用量（多次模型迭代求和）。
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+
     try {
       for (let iteration = 0; iteration < this.maxIterations; iteration++) {
         if (signal.aborted) {
@@ -143,6 +147,8 @@ export class AgentSession {
           iter = await streamGen.next();
         }
         const generated = iter.value;
+        totalInputTokens += generated.inputTokens;
+        totalOutputTokens += generated.outputTokens;
 
         if (signal.aborted) {
           this.pushInterruptedAssistant(generated.text, generated.toolCalls);
@@ -156,6 +162,10 @@ export class AgentSession {
         if (toolCalls.length === 0) {
           this.messages.push({ id: randomUUID(), role: 'assistant', content: text });
           yield { type: 'session_completed', finalMessages: [...this.messages] };
+          // 提供商上报过用量时才发事件（部分兼容端点不返回 usage）。
+          if (totalInputTokens > 0 || totalOutputTokens > 0) {
+            yield { type: 'usage_reported', inputTokens: totalInputTokens, outputTokens: totalOutputTokens };
+          }
           return;
         }
 
@@ -204,8 +214,14 @@ export class AgentSession {
   private async *streamModel(
     tools: ReturnType<ToolRegistry['snapshot']>,
     signal: AbortSignal,
-  ): AsyncGenerator<AgentEvent, { text: string; toolCalls: ToolCall[] }, unknown> {
+  ): AsyncGenerator<
+    AgentEvent,
+    { text: string; toolCalls: ToolCall[]; inputTokens: number; outputTokens: number },
+    unknown
+  > {
     let text = '';
+    let inputTokens = 0;
+    let outputTokens = 0;
     const pending = new Map<string, ToolCall>();
     const completed: ToolCall[] = [];
 
@@ -256,6 +272,11 @@ export class AgentSession {
             }
             break;
           }
+          case 'usage': {
+            inputTokens = chunk.inputTokens;
+            outputTokens = chunk.outputTokens;
+            break;
+          }
         }
       }
     } catch (error) {
@@ -265,7 +286,7 @@ export class AgentSession {
       }
     }
 
-    return { text, toolCalls: completed };
+    return { text, toolCalls: completed, inputTokens, outputTokens };
   }
 
   private async *executeTool(toolCall: ToolCall, signal: AbortSignal): AsyncGenerator<AgentEvent, void, unknown> {

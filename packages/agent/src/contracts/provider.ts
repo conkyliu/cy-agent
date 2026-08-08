@@ -15,7 +15,9 @@ export type ProviderChunk =
   | { type: 'text'; text: string }
   | { type: 'tool_call_start'; toolCall: ToolCall }
   | { type: 'tool_call_chunk'; toolCallId: string; delta: string }
-  | { type: 'tool_call_end'; toolCallId: string };
+  | { type: 'tool_call_end'; toolCallId: string }
+  /** 单次模型请求的真实 token 用量（提供商不支持时可不发）。 */
+  | { type: 'usage'; inputTokens: number; outputTokens: number };
 
 /**
  * 模型提供商契约：任何接入的模型（OpenAI / Anthropic / Gemini 等）必须实现此接口。

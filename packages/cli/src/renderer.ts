@@ -80,6 +80,12 @@ export function renderEvent(event: AgentEvent, options: RenderOptions = {}): str
       return paint(`✓ ${preview(event.result)}\n`, ANSI.green, color);
     case 'tool_execution_failed':
       return paint(`✗ ${event.error}\n`, ANSI.red, color);
+    case 'usage_reported':
+      return paint(
+        `\n⋯ Tokens: ${event.inputTokens} in / ${event.outputTokens} out\n`,
+        ANSI.dim,
+        color,
+      );
     case 'session_cancelled':
       return paint('\n⊘ Session cancelled\n', ANSI.dim, color);
     case 'session_error':

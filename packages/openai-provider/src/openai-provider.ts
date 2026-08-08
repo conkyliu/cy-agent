@@ -40,6 +40,8 @@ export class OpenAICompatProvider implements ProviderContract {
       model: this.options.model,
       messages: toOpenAIMessages(options.messages),
       stream: true,
+      // 请求在流末尾追加 usage 统计 chunk（不支持的兼容端点会静默忽略）。
+      stream_options: { include_usage: true },
     };
     if (this.options.temperature !== undefined) {
       body.temperature = this.options.temperature;
@@ -105,6 +107,12 @@ export class OpenAICompatProvider implements ProviderContract {
             payload = JSON.parse(data);
           } catch {
             continue; // 容忍单行损坏的 JSON
+          }
+
+          // include_usage 时末尾会出现 choices 为空、仅带 usage 的统计 chunk。
+          const usage = payload.usage;
+          if (usage && typeof usage.prompt_tokens === 'number' && typeof usage.completion_tokens === 'number') {
+            yield { type: 'usage', inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens };
           }
 
           const choice = payload.choices?.[0];

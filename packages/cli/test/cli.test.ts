@@ -84,6 +84,10 @@ describe('renderEvent', () => {
     const compacted = renderEvent({ type: 'context_compacted', removedMessages: 5 });
     expect(compacted).toContain('compacted');
     expect(compacted).toContain('5');
+
+    const usage = renderEvent({ type: 'usage_reported', inputTokens: 100, outputTokens: 42 });
+    expect(usage).toContain('100');
+    expect(usage).toContain('42');
   });
 
   it('开启颜色时输出 ANSI 码，关闭时为纯文本', () => {

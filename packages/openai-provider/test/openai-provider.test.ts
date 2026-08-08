@@ -129,6 +129,30 @@ describe('OpenAICompatProvider', () => {
     expect(body.messages[2]).toEqual({ role: 'tool', content: 'echo: prev', tool_call_id: 'call_0' });
   });
 
+  it('requests include_usage and parses the trailing usage chunk', async () => {
+    const { fetchImpl, captured } = mockFetch([
+      { choices: [{ delta: { content: 'Hi' } }] },
+      { choices: [], usage: { prompt_tokens: 12, completion_tokens: 3, total_tokens: 15 } },
+    ]);
+    const provider = new OpenAICompatProvider({ apiKey: 'sk-test', model: 'gpt-test', fetchImpl });
+
+    const chunks = await collect(provider.generateStream({ messages: [userMessage] }));
+
+    expect(chunks).toEqual([
+      { type: 'text', text: 'Hi' },
+      { type: 'usage', inputTokens: 12, outputTokens: 3 },
+    ]);
+    expect(captured().body.stream_options).toEqual({ include_usage: true });
+  });
+
+  it('tolerates streams without a usage chunk (legacy endpoints)', async () => {
+    const { fetchImpl } = mockFetch([{ choices: [{ delta: { content: 'ok' } }] }]);
+    const provider = new OpenAICompatProvider({ apiKey: 'sk-test', model: 'gpt-test', fetchImpl });
+
+    const chunks = await collect(provider.generateStream({ messages: [userMessage] }));
+    expect(chunks).toEqual([{ type: 'text', text: 'ok' }]);
+  });
+
   it('throws a provider-level error on non-2xx responses', async () => {
     const fetchImpl = (async () =>
       new Response('Invalid API key', { status: 401 })) as unknown as typeof fetch;

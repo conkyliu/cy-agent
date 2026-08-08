@@ -62,6 +62,32 @@ describe('AgentSession', () => {
     }
   });
 
+  it('aggregates usage across iterations and reports it after completion', async () => {
+    const provider = new MockProvider([
+      [
+        ...toolCallChunks('tc1', 'echo', { text: 'x' }),
+        { type: 'usage', inputTokens: 10, outputTokens: 5 },
+      ],
+      [...textChunks('Done.'), { type: 'usage', inputTokens: 20, outputTokens: 7 }],
+    ]);
+    const registry = new ToolRegistry();
+    registry.register(echoTool);
+
+    const events = await drain(session(provider, registry).run('go'));
+
+    // 多次迭代的用量求和，且紧随 session_completed 作为最后一个事件。
+    expect(events[events.length - 2]?.type).toBe('session_completed');
+    const last = events[events.length - 1];
+    expect(last).toMatchObject({ type: 'usage_reported', inputTokens: 30, outputTokens: 12 });
+  });
+
+  it('skips usage_reported when the provider reports no usage', async () => {
+    const provider = new MockProvider([textChunks('ok')]);
+    const events = await drain(session(provider, new ToolRegistry()).run('hi'));
+    expect(events[events.length - 1]?.type).toBe('session_completed');
+    expect(events.some((e) => e.type === 'usage_reported')).toBe(false);
+  });
+
   it('executes tool calls and loops back to the model', async () => {
     const provider = new MockProvider([
       [...textChunks('Let me check. '), ...toolCallChunks('tc1', 'echo', { text: 'ping' })],
