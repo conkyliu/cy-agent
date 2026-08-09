@@ -3,7 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "description": "Electron desktop shell: main process hosts the agent runtime, renderer consumes the AgentEvent stream",
-  "author": "cy-agent contributors",
+  "homepage": "https://github.com/conkyliu/cy-agent",
+  "author": {
+    "name": "cy-agent contributors",
+    "email": "conkyliu@users.noreply.github.com"
+  },
   "main": "./dist/main/index.cjs",
   "scripts": {
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
