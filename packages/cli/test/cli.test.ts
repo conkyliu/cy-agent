@@ -8,9 +8,10 @@ import { AgentSession, ToolRegistry } from '@cy-agent/agent';
 import type { AgentEvent, Message } from '@cy-agent/protocol';
 import { JsonFileSessionStore } from '@cy-agent/storage';
 import { MockProvider, textChunks, toolCallChunks } from '../../agent/test/fixtures.js';
-import { loadConfig, parseCliArgs } from '../src/config.js';
+import { loadConfig, parseCliArgs, parsePositionals } from '../src/config.js';
 import { preview, renderEvent } from '../src/renderer.js';
 import { runRepl } from '../src/repl.js';
+import { runOnce } from '../src/run-once.js';
 
 describe('parseCliArgs', () => {
   it('解析 --key=value 形式参数并忽略未知参数', () => {
@@ -23,6 +24,25 @@ describe('parseCliArgs', () => {
   it('支持无值开关（如 --help）', () => {
     const flags = parseCliArgs(['--help']);
     expect(flags.get('help')).toBe('');
+  });
+
+  it('支持单字符短选项：-p 消费下一参数，别名归一化', () => {
+    expect(parseCliArgs(['-p', 'hello world']).get('prompt')).toBe('hello world');
+    expect(parseCliArgs(['--prompt=hello']).get('prompt')).toBe('hello');
+    expect(parseCliArgs(['-p=hello']).get('prompt')).toBe('hello');
+    expect(parseCliArgs(['-y']).has('yes')).toBe(true);
+  });
+});
+
+describe('parsePositionals', () => {
+  it('收集位置参数并跳过选项及其消费的值', () => {
+    expect(parsePositionals(['--model=x', '-p', 'hello', 'fix', 'the', 'bug'])).toEqual([
+      'fix',
+      'the',
+      'bug',
+    ]);
+    expect(parsePositionals(['--prompt=a', 'extra'])).toEqual(['extra']);
+    expect(parsePositionals([])).toEqual([]);
   });
 });
 
@@ -50,6 +70,23 @@ describe('loadConfig', () => {
 
   it('缺失 API Key 时抛出致命错误', () => {
     expect(() => loadConfig({}, new Map(), '/workspace')).toThrow(/Missing API key/);
+  });
+
+  it('收集单次执行模式配置：prompt / output / yes', () => {
+    const config = loadConfig(
+      { CY_AGENT_API_KEY: 'k' },
+      parseCliArgs(['-p', 'hi', '--output=json', '-y']),
+      '/workspace',
+    );
+    expect(config.prompt).toBe('hi');
+    expect(config.output).toBe('json');
+    expect(config.yes).toBe(true);
+  });
+
+  it('非法 --output 取值抛出致命错误', () => {
+    expect(() =>
+      loadConfig({ CY_AGENT_API_KEY: 'k' }, parseCliArgs(['--output=xml']), '/workspace'),
+    ).toThrow(/Invalid --output/);
   });
 });
 
@@ -376,5 +413,145 @@ describe('runRepl 多会话管理', () => {
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('runOnce（非交互单次执行）', () => {
+  function captureStreams(): {
+    output: PassThrough;
+    errorOutput: PassThrough;
+    outText: () => string;
+    errText: () => string;
+  } {
+    const output = new PassThrough();
+    const errorOutput = new PassThrough();
+    let out = '';
+    let err = '';
+    output.on('data', (chunk: Buffer) => {
+      out += chunk.toString();
+    });
+    errorOutput.on('data', (chunk: Buffer) => {
+      err += chunk.toString();
+    });
+    return { output, errorOutput, outText: () => out, errText: () => err };
+  }
+
+  function createApprovalTool(executed: { count: number }): ToolBase {
+    return {
+      name: 'write_file',
+      description: 'Write a file',
+      parameters: { type: 'object' },
+      requiresApproval: true,
+      async execute(): Promise<string> {
+        executed.count += 1;
+        return 'Wrote 2 bytes to a.txt';
+      },
+    };
+  }
+
+  it('text 模式：模型文本流式写 stdout，usage 透传，退出状态 completed', async () => {
+    const provider = new MockProvider([
+      [
+        ...textChunks('Hello '),
+        ...textChunks('world'),
+        { type: 'usage', inputTokens: 3, outputTokens: 2 },
+      ],
+    ]);
+    const session = new AgentSession({ provider, registry: new ToolRegistry() });
+    const { output, errorOutput, outText } = captureStreams();
+
+    const result = await runOnce({ session, prompt: 'hi', output, errorOutput });
+
+    expect(result.status).toBe('completed');
+    expect(result.result).toBe('Hello world');
+    expect(result.usage).toEqual({ inputTokens: 3, outputTokens: 2 });
+    expect(outText()).toBe('Hello world\n');
+  });
+
+  it('text 模式：工具进度事件写 stderr，stdout 仅含模型文本', async () => {
+    const provider = new MockProvider([
+      toolCallChunks('call_1', 'write_file', { path: 'a.txt' }),
+      [...textChunks('Done.')],
+    ]);
+    const executed = { count: 0 };
+    const registry = new ToolRegistry();
+    registry.register(createApprovalTool(executed));
+    const session = new AgentSession({ provider, registry });
+    const { output, errorOutput, outText, errText } = captureStreams();
+
+    const result = await runOnce({
+      session,
+      prompt: 'create a.txt',
+      output,
+      errorOutput,
+      autoApprove: true,
+    });
+
+    expect(executed.count).toBe(1);
+    expect(result.toolCalls).toEqual([
+      { name: 'write_file', args: { path: 'a.txt' }, status: 'completed' },
+    ]);
+    expect(outText()).toBe('Done.\n');
+    expect(errText()).toContain('write_file');
+    expect(errText()).toContain('(auto-approved)');
+  });
+
+  it('json 模式：stdout 恰为单个可解析 JSON，进度静默', async () => {
+    const provider = new MockProvider([
+      toolCallChunks('call_1', 'write_file', { path: 'a.txt' }),
+      [...textChunks('Done.')],
+    ]);
+    const executed = { count: 0 };
+    const registry = new ToolRegistry();
+    registry.register(createApprovalTool(executed));
+    const session = new AgentSession({ provider, registry });
+    const { output, errorOutput, outText, errText } = captureStreams();
+
+    // 默认拒绝授权：工具不执行，状态标为 denied。
+    const result = await runOnce({
+      session,
+      prompt: 'create a.txt',
+      output,
+      errorOutput,
+      json: true,
+    });
+
+    expect(executed.count).toBe(0);
+    expect(result.status).toBe('completed');
+    const parsed = JSON.parse(outText()) as {
+      status: string;
+      result: string;
+      toolCalls: Array<{ name: string; args: unknown; status: string }>;
+    };
+    expect(parsed.status).toBe('completed');
+    expect(parsed.result).toBe('Done.');
+    expect(parsed.toolCalls).toEqual([
+      { name: 'write_file', args: { path: 'a.txt' }, status: 'denied' },
+    ]);
+    expect(errText()).toBe('');
+  });
+
+  it('会话错误：状态为 error 并携带错误信息', async () => {
+    const provider = new MockProvider([
+      (): never => {
+        throw new Error('boom');
+      },
+    ]);
+    const session = new AgentSession({ provider, registry: new ToolRegistry() });
+    const { output, errorOutput, outText } = captureStreams();
+
+    const result = await runOnce({
+      session,
+      prompt: 'hi',
+      output,
+      errorOutput,
+      json: true,
+    });
+
+    expect(result.status).toBe('error');
+    expect(result.error).toContain('boom');
+    const parsed = JSON.parse(outText()) as { status: string; error: string };
+    expect(parsed.status).toBe('error');
+    expect(parsed.error).toContain('boom');
   });
 });

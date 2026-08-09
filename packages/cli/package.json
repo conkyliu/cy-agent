@@ -2,7 +2,7 @@
   "name": "@cy-agent/cli",
   "version": "0.0.0",
   "type": "module",
-  "description": "Interactive coding agent CLI (REPL, HITL approval host)",
+  "description": "Coding agent CLI (interactive REPL + non-interactive one-shot mode, HITL approval host)",
   "bin": {
     "cy-agent": "./dist/main.js"
   },

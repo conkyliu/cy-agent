@@ -6,18 +6,37 @@ import { OpenAICompatProvider } from '@cy-agent/openai-provider';
 import type { Message } from '@cy-agent/protocol';
 import { JsonFileSessionStore } from '@cy-agent/storage';
 import { createCodingTools, createRunShellTool } from '@cy-agent/tools';
-import { HELP_TEXT, loadConfig, parseCliArgs } from './config.js';
-import { runRepl } from './repl.js';
+import { HELP_TEXT, loadConfig, parseCliArgs, parsePositionals } from './config.js';
+import { persistSession, runRepl } from './repl.js';
+import { readStdinPrompt, runOnce } from './run-once.js';
 
 const SYSTEM_PROMPT = `You are cy-agent, a coding assistant operating inside the user's workspace.
 Use the provided tools (read_file, write_file, list_directory, search_files, run_shell) to inspect and modify code.
 Be concise. write_file and run_shell require explicit user approval and will be prompted automatically.`;
 
 async function main(): Promise<void> {
-  const flags = parseCliArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const flags = parseCliArgs(argv);
   if (flags.has('help')) {
     process.stdout.write(HELP_TEXT);
     return;
+  }
+
+  // 单次执行提示词：-p/--prompt > 位置参数 > stdin（-p - / 空 -p）。
+  let oneShotPrompt: string | undefined;
+  if (flags.has('prompt')) {
+    const raw = flags.get('prompt');
+    oneShotPrompt = raw === undefined || raw === '' || raw === '-' ? await readStdinPrompt() : raw;
+    if (oneShotPrompt.length === 0) {
+      process.stderr.write('✗ Empty prompt. Pass text to -p/--prompt or pipe it via stdin.\n');
+      process.exitCode = 1;
+      return;
+    }
+  } else {
+    const positionals = parsePositionals(argv);
+    if (positionals.length > 0) {
+      oneShotPrompt = positionals.join(' ');
+    }
   }
 
   let config;
@@ -74,6 +93,21 @@ async function main(): Promise<void> {
     sessionOptions.id = config.resume;
   }
   const session = new AgentSession(sessionOptions);
+
+  if (oneShotPrompt !== undefined) {
+    // 非交互单次执行：跑一轮即退出，供脚本与 CI 使用。
+    const result = await runOnce({
+      session,
+      prompt: oneShotPrompt,
+      json: config.output === 'json',
+      autoApprove: config.yes === true,
+      color: process.stderr.isTTY === true,
+    });
+    // 部分进展同样落盘，支持 --resume 多轮串联。
+    await persistSession(session, store, (text) => process.stderr.write(text));
+    process.exitCode = result.status === 'completed' ? 0 : result.status === 'cancelled' ? 130 : 1;
+    return;
+  }
 
   // 会话工厂：/new 与 /open 用它重建会话（systemPrompt 重新注入）。
   const createSession = (messages?: Message[], sessionId?: string): AgentSession => {

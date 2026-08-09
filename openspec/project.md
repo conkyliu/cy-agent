@@ -43,9 +43,9 @@ Headless Agent 运行时。核心与任何 UI / 框架 / 宿主环境（CLI、El
 ## Roadmap Reference
 
 - Phase 0 工程基础（本仓库骨架）
-- Phase 1 Headless Agent Core（当前：bootstrap-agent-runtime）
-- Phase 2 Coding Agent CLI
-- Phase 3 Desktop Shell
+- Phase 1 Headless Agent Core（已完成：bootstrap-agent-runtime 等 13 个 change）
+- Phase 2 Coding Agent CLI（已完成）
+- Phase 3 Desktop Shell（当前：add-desktop-shell）
 - Phase 4 代码工作区
 - Phase 5 扩展能力（插件 / 技能 / MCP）
 - Phase 6 高级上下文（符号索引 / 依赖图）

@@ -280,8 +280,8 @@ function deriveTitle(messages: readonly Message[]): string | undefined {
   return collapsed.length > 60 ? `${collapsed.slice(0, 59)}…` : collapsed;
 }
 
-/** 保存当前会话的非 system 消息；保存失败仅提示不中断 REPL。 */
-async function persistSession(
+/** 保存当前会话的非 system 消息；保存失败仅提示不中断。单次执行模式亦复用。 */
+export async function persistSession(
   session: AgentSession,
   store: SessionStore,
   write: (text: string) => void,
