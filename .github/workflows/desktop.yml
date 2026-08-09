@@ -53,6 +53,9 @@ jobs:
 
       - name: Build desktop app
         run: pnpm desktop:build
+      - name: Create release directory
+        if: runner.os == 'Linux'
+        run: mkdir -p packages/desktop/release/@cy-agent
 
       - name: Package installer
         shell: bash
