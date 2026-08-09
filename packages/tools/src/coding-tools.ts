@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { ToolBase, ToolContract } from '@cy-agent/agent';
+import { createGitSnapshot } from './git-snapshot.js';
 import { resolveInWorkspace, SKIPPED_DIRECTORIES } from './workspace.js';
 
 export interface ReadFileArgs {
@@ -72,7 +73,9 @@ export function createReadFileTool(cwd: string): ToolContract<ReadFileArgs, stri
 export function createWriteFileTool(cwd: string): ToolContract<WriteFileArgs, string> {
   return {
     name: 'write_file',
-    description: 'Create or overwrite a text file in the workspace. Requires user approval.',
+    description:
+      'Create or overwrite a text file in the workspace. Requires user approval. ' +
+      'Overwriting an existing file in a git repository creates a snapshot first.',
     requiresApproval: true,
     parameters: {
       type: 'object',
@@ -84,11 +87,32 @@ export function createWriteFileTool(cwd: string): ToolContract<WriteFileArgs, st
     },
     execute: async (args) => {
       const file = resolveInWorkspace(cwd, args.path);
+      // 安全兜底：覆写已有文件前先创建 git 快照（失败静默跳过，不阻塞写入）。
+      const snapshot = await snapshotBeforeOverwrite(cwd, file);
       await fs.mkdir(path.dirname(file), { recursive: true });
       await fs.writeFile(file, args.content, 'utf8');
-      return `Wrote ${Buffer.byteLength(args.content, 'utf8')} bytes to ${args.path}`;
+      const base = `Wrote ${Buffer.byteLength(args.content, 'utf8')} bytes to ${args.path}`;
+      if (snapshot === null) {
+        return base;
+      }
+      return `${base} (snapshot: ${snapshot}; restore with "git cat-file blob ${snapshot} > ${args.path}")`;
     },
   };
+}
+
+/** 目标文件已存在时创建快照并返回 blob SHA；否则或失败时返回 null。 */
+async function snapshotBeforeOverwrite(cwd: string, file: string): Promise<string | null> {
+  try {
+    await fs.stat(file);
+  } catch {
+    // 新建文件没有需要保护的内容。
+    return null;
+  }
+  const snapshot = await createGitSnapshot(cwd, file);
+  if (snapshot.created && snapshot.blobSha !== undefined) {
+    return snapshot.blobSha;
+  }
+  return null;
 }
 
 export function createListDirectoryTool(cwd: string): ToolContract<ListDirectoryArgs, string> {

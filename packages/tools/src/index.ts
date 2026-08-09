@@ -11,3 +11,4 @@ export {
 } from './coding-tools.js';
 export { resolveInWorkspace, SKIPPED_DIRECTORIES } from './workspace.js';
 export { createRunShellTool, type RunShellArgs } from './shell-tool.js';
+export { createGitSnapshot, type GitSnapshotResult } from './git-snapshot.js';
