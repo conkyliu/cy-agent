@@ -1,27 +1,39 @@
 # electron-builder 打包配置：macOS / Windows / Linux 产物。
 appId: com.cyagent.desktop
 productName: cy-agent
+
 directories:
   output: release
+
 files:
   - dist/**/*
   - package.json
+
+# 统一控制最终产物名称，避免 workspace package name
+# @cy-agent/desktop 被用于 Linux deb 文件名。
+artifactName: ${productName}-${version}-${arch}.${ext}
+
 mac:
   target:
     - dmg
   category: public.app-category.developer-tools
   # 未配置签名证书时跳过自动签名。
   identity: null
+
 dmg:
   title: cy-agent
+
 win:
   target:
     - nsis
+
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+
 linux:
   target:
     - AppImage
     - deb
   category: Development
+  packageName: cy-agent
