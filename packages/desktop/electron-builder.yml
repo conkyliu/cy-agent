@@ -1,4 +1,4 @@
-^# electron-builder 打包配置：macOS / Windows / Linux 产物。
+# electron-builder 打包配置：macOS / Windows / Linux 产物。
 appId: com.cyagent.desktop
 productName: cy-agent
 directories:
