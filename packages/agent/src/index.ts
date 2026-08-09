@@ -22,3 +22,4 @@ export {
   SUMMARY_MARKER,
   type CompactionOptions,
 } from './context/compaction.js';
+export { DEFAULT_MAX_TOOL_OUTPUT_CHARS, truncateToolOutput } from './context/output.js';

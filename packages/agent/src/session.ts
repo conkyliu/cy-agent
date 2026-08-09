@@ -10,6 +10,7 @@ import {
   trimToBudget,
   type ContextBudgetOptions,
 } from './context/budget.js';
+import { DEFAULT_MAX_TOOL_OUTPUT_CHARS, truncateToolOutput } from './context/output.js';
 import {
   buildTranscript,
   createSummaryMessage,
@@ -41,6 +42,8 @@ export interface AgentSessionOptions {
   contextBudget?: ContextBudgetOptions;
   /** LLM 驱动的上下文压缩；预算将满时先总结旧历史，失败回退裁剪。 */
   compaction?: CompactionOptions;
+  /** 单条工具输出的最大字符数，超限截断（保留头尾）；默认 32000。 */
+  maxToolOutputChars?: number;
 }
 
 /**
@@ -56,6 +59,7 @@ export class AgentSession {
   private readonly policy: ToolExecutionPolicy;
   private readonly maxIterations: number;
   private readonly maxInputTokens: number;
+  private readonly maxToolOutputChars: number;
   private readonly compactionEnabled: boolean;
   private readonly compactionThreshold: number;
   private readonly keepRecentUnits: number;
@@ -69,6 +73,7 @@ export class AgentSession {
     this.policy = options.policy ?? autoApprovePolicy;
     this.maxIterations = options.maxIterations ?? 20;
     this.maxInputTokens = options.contextBudget?.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS;
+    this.maxToolOutputChars = options.maxToolOutputChars ?? DEFAULT_MAX_TOOL_OUTPUT_CHARS;
     this.compactionEnabled = options.compaction?.enabled ?? true;
     this.compactionThreshold = options.compaction?.threshold ?? DEFAULT_COMPACTION_THRESHOLD;
     this.keepRecentUnits = options.compaction?.keepRecentUnits ?? DEFAULT_KEEP_RECENT_UNITS;
@@ -356,8 +361,11 @@ export class AgentSession {
       yield { type: 'tool_execution_started', toolCallId: toolCall.id, name: toolCall.name, args };
 
       const result = await tool.execute(args, signal);
-      yield { type: 'tool_execution_completed', toolCallId: toolCall.id, result };
-      appendToolResult(typeof result === 'string' ? result : JSON.stringify(result));
+      // 统一截断层：事件流与历史消息使用同一截断结果，防止大输出污染上下文。
+      const raw = typeof result === 'string' ? result : JSON.stringify(result);
+      const output = truncateToolOutput(raw, this.maxToolOutputChars);
+      yield { type: 'tool_execution_completed', toolCallId: toolCall.id, result: output };
+      appendToolResult(output);
     } catch (error) {
       // Tool 级错误不中断会话：异常转换为字符串交还给 LLM。
       const message = `Error: ${toError(error).message}`;

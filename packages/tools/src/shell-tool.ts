@@ -21,8 +21,8 @@ const MAX_OUTPUT_BYTES = 100_000;
  *
  * 安全边界：
  * - cwd 必须位于工作区沙箱内（resolveInWorkspace 防逃逸）。
- * - 超时杀进程树（POSIX 用 kill 'SIGKILL'，Windows 用 taskkill /T /F），
- *   AbortSignal 取消同样杀进程树。
+ * - 超时杀进程树（POSIX 用 detached 进程组 + kill(-pid, 'SIGKILL')，
+ *   Windows 用 taskkill /T /F），AbortSignal 取消同样杀进程树。
  * - 输出超长截断；非零退出码不抛异常，格式化为结果交还 LLM 自我修正
  *   （遵循 spec 6.2：工具级错误严禁终止 Loop）。
  */
@@ -77,7 +77,12 @@ function runCommand(
       return;
     }
 
-    const child: ChildProcessWithoutNullStreams = spawn(command, { cwd, shell: true });
+    const child: ChildProcessWithoutNullStreams = spawn(command, {
+      cwd,
+      shell: true,
+      // POSIX 下让子 shell 独立成进程组，便于超时/取消时整组杀掉（见 killChild）。
+      detached: process.platform !== 'win32',
+    });
     const captured: Captured = {
       stdout: '',
       stderr: '',
@@ -153,9 +158,11 @@ function runCommand(
 /**
  * 杀掉子进程及其整棵进程树。
  *
- * Windows 下 shell:true 会先启动 cmd.exe，再派生实际的子孙进程；
- * child.kill() 只能终止 cmd.exe 本身，孙进程仍持有 stdio 管道句柄，
- * 导致 'close' 事件迟迟不触发。因此 Windows 上用 taskkill /T /F 杀整棵树。
+ * shell:true 会先启动系统 shell（POSIX 的 /bin/sh、Windows 的 cmd.exe），
+ * 再由其派生实际的子孙进程。child.kill() 只能终止直接子进程本身，
+ * 孙进程仍持有 stdio 管道句柄，导致 'close' 事件迟迟不触发。
+ * - POSIX：spawn 时已 detached 独立进程组，这里用 kill(-pid) 杀整组；
+ * - Windows：用 taskkill /T /F 杀整棵进程树。
  */
 function killChild(child: ChildProcessWithoutNullStreams): void {
   if (process.platform === 'win32') {
@@ -172,6 +179,15 @@ function killChild(child: ChildProcessWithoutNullStreams): void {
       child.kill('SIGKILL');
     });
     return;
+  }
+  if (child.pid !== undefined) {
+    try {
+      // 负数 pid 表示向整个进程组发送信号，连同孙进程一起终止。
+      process.kill(-child.pid, 'SIGKILL');
+      return;
+    } catch {
+      // 进程组不存在（如进程已退出）时退化为仅杀 shell 进程本身。
+    }
   }
   child.kill('SIGKILL');
 }

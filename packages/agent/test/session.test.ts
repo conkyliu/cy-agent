@@ -132,6 +132,35 @@ describe('AgentSession', () => {
     expect(provider.requests[1]?.messages.some((m) => m.role === 'tool')).toBe(true);
   });
 
+  it('truncates oversized tool output before storing it in history', async () => {
+    const bigTool: ToolContract = {
+      name: 'big',
+      description: 'Returns a huge output',
+      parameters: { type: 'object' },
+      execute: async () => `HEAD-${'x'.repeat(10_000)}-TAIL`,
+    };
+    const provider = new MockProvider([toolCallChunks('tc1', 'big', {}), textChunks('ok')]);
+    const registry = new ToolRegistry();
+    registry.register(bigTool);
+
+    const agent = new AgentSession({ provider, registry, maxToolOutputChars: 500 });
+    const events = await drain(agent.run('read big'));
+
+    // 事件流与历史消息使用同一截断结果。
+    const completed = events.find((e) => e.type === 'tool_execution_completed');
+    if (completed?.type === 'tool_execution_completed') {
+      const result = completed.result as string;
+      expect(result.length).toBeLessThanOrEqual(500);
+      expect(result).toContain('output truncated');
+    }
+    const toolMessage = agent.getMessages().find((m) => m.role === 'tool');
+    expect(toolMessage?.content).toContain('output truncated');
+    expect(toolMessage?.content?.length ?? 0).toBeLessThanOrEqual(500);
+    // 头尾保留：模型仍能看到开头与结尾。
+    expect(toolMessage?.content?.startsWith('HEAD-')).toBe(true);
+    expect(toolMessage?.content?.endsWith('-TAIL')).toBe(true);
+  });
+
   it('converts tool errors into messages for the LLM without aborting', async () => {
     const provider = new MockProvider([
       toolCallChunks('tc1', 'boom', {}),
