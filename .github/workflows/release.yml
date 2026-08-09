@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: --mac
+            stage-glob: 'packages/desktop/release/*.dmg packages/desktop/release/*.zip'
+          - os: windows-latest
+            target: --win
+            stage-glob: 'packages/desktop/release/*.exe'
+          - os: ubuntu-latest
+            target: --linux
+            stage-glob: 'packages/desktop/release/*.AppImage packages/desktop/release/*.deb'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install FUSE (Linux AppImage)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2t64
+
+      - name: Build desktop app
+        run: pnpm desktop:build
+
+      - name: Resolve version from tag
+        shell: bash
+        run: echo "RELEASE_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Package installer
+        shell: bash
+        run: >-
+          pnpm --filter @cy-agent/desktop exec electron-builder ${{ matrix.target }}
+          --config.extraMetadata.version=$RELEASE_VERSION
+
+      - name: Stage release files
+        shell: bash
+        run: |
+          mkdir staged
+          cp ${{ matrix.stage-glob }} staged/
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: staged/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: package
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true

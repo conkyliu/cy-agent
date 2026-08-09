@@ -12,7 +12,10 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "desktop:dev": "pnpm -r --filter '!@cy-agent/desktop' build && pnpm --filter @cy-agent/desktop dev",
+    "desktop:build": "pnpm build && pnpm --filter @cy-agent/desktop build",
+    "desktop:release": "pnpm desktop:build && pnpm --filter @cy-agent/desktop release"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

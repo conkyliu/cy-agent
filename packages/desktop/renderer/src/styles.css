@@ -1,0 +1,50 @@
+@import 'tailwindcss';
+
+/**
+ * JetBrains Islands Light 主题 Token。
+ * 组件层只引用这里的语义类（bg-surface / text-primary / accent-*），
+ * 禁止书写裸颜色值；换主题只需替换本层。
+ */
+@theme {
+  /* 中性灰背景层次（Islands Light） */
+  --color-surface: #ffffff;
+  --color-surface-soft: #f7f8fa;
+  --color-surface-muted: #eef0f4;
+  --color-surface-border: #d4d7de;
+
+  /* 文本层次 */
+  --color-primary: #1f2328;
+  --color-secondary: #5f6672;
+  --color-faint: #8c929e;
+
+  /* 低饱和强调色（IntelliJ 蓝系） */
+  --color-accent: #3574f0;
+  --color-accent-soft: #e3edfd;
+  --color-accent-hover: #2b62d1;
+
+  /* 状态色 */
+  --color-danger: #d6404b;
+  --color-danger-soft: #fdecec;
+  --color-success: #2e8b57;
+  --color-warning: #b78819;
+  --color-warning-soft: #fdf6e3;
+
+  /* 圆角：控件 ≥ 8px */
+  --radius-control: 8px;
+  --radius-card: 12px;
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-primary);
+  background: var(--color-surface-soft);
+}

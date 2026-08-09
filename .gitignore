@@ -6,4 +6,5 @@ coverage/
 .env
 .idea/
 /packages/cli/.cy-agent/
+/packages/desktop/release/
 /.reasonix/

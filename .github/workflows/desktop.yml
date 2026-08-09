@@ -1,0 +1,66 @@
+name: Desktop
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  desktop:
+    name: Desktop / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            package-cmd: pnpm --filter @cy-agent/desktop release
+            artifact-pattern: |
+              packages/desktop/release/*.dmg
+              packages/desktop/release/*.zip
+          - os: windows-latest
+            package-cmd: pnpm --filter @cy-agent/desktop release:win
+            artifact-pattern: |
+              packages/desktop/release/*.exe
+          - os: ubuntu-latest
+            package-cmd: pnpm --filter @cy-agent/desktop release:linux
+            artifact-pattern: |
+              packages/desktop/release/*.AppImage
+              packages/desktop/release/*.deb
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.20.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install FUSE (Linux AppImage)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2t64
+
+      - name: Build desktop app
+        run: pnpm desktop:build
+
+      - name: Package installer
+        shell: bash
+        run: ${{ matrix.package-cmd }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: ${{ matrix.artifact-pattern }}
+          if-no-files-found: error
