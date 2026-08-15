@@ -19,7 +19,7 @@ jobs:
         include:
           - os: macos-latest
             target: --mac
-            stage-glob: 'packages/desktop/release/*.dmg packages/desktop/release/*.zip'
+            stage-glob: 'packages/desktop/release/*.dmg'
           - os: windows-latest
             target: --win
             stage-glob: 'packages/desktop/release/*.exe'

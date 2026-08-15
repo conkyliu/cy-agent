@@ -25,3 +25,6 @@ linux:
     - AppImage
     - deb
   category: Development
+deb:
+  # 显式命名，避免使用 scoped 包名（含 "/"）导致 fpm 写入不存在的子目录。
+  artifactName: ${productName}_${version}_${arch}.${ext}
