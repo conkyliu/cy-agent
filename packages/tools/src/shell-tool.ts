@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { ToolContract } from '@cy-agent/agent';
-import { resolveInWorkspace } from './workspace.js';
+import { resolveInWorkspaceSafe } from './workspace.js';
 
 export interface RunShellArgs {
   /** 交由系统 shell 执行的命令 */
@@ -20,7 +20,7 @@ const MAX_OUTPUT_BYTES = 100_000;
  * Shell 执行工具：高危操作，requiresApproval 强制开启。
  *
  * 安全边界：
- * - cwd 必须位于工作区沙箱内（resolveInWorkspace 防逃逸）。
+ * - cwd 必须位于工作区沙箱内（resolveInWorkspaceSafe 防 `..` 与符号链接逃逸）。
  * - 超时杀进程树（POSIX 用 detached 进程组 + kill(-pid, 'SIGKILL')，
  *   Windows 用 taskkill /T /F），AbortSignal 取消同样杀进程树。
  * - 输出超长截断；非零退出码不抛异常，格式化为结果交还 LLM 自我修正
@@ -51,7 +51,7 @@ export function createRunShellTool(workspaceRoot: string): ToolContract<RunShell
       required: ['command'],
     },
     execute: async (args, signal) => {
-      const cwd = resolveInWorkspace(workspaceRoot, args.cwd ?? '.');
+      const cwd = await resolveInWorkspaceSafe(workspaceRoot, args.cwd ?? '.');
       const timeoutMs = Math.min(args.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
       return runCommand(args.command, cwd, timeoutMs, signal);
     },

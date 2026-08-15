@@ -16,6 +16,8 @@ const api: DesktopApi = {
   openSession: (id) => ipcRenderer.invoke(IpcChannels.sessionsOpen, id),
   deleteSession: (id) => ipcRenderer.invoke(IpcChannels.sessionsDelete, id),
   getConfig: () => ipcRenderer.invoke(IpcChannels.configGet),
+  getWorkspace: () => ipcRenderer.invoke(IpcChannels.workspaceGet),
+  selectWorkspace: () => ipcRenderer.invoke(IpcChannels.workspaceSelect),
   onAgentEvent: (listener) => {
     const handler = (_event: IpcRendererEvent, payload: IpcAgentEvent): void => {
       listener(payload);

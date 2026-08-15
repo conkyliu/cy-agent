@@ -34,6 +34,11 @@ export class SessionManager {
     this.emit = emit;
   }
 
+  /** 替换 systemPrompt：后续重建会话（新建/打开/工作区切换）使用新提示词。 */
+  setSystemPrompt(systemPrompt: string): void {
+    this.options.systemPrompt = systemPrompt;
+  }
+
   private forward(event: IpcAgentEvent): void {
     this.emit?.(event);
   }

@@ -8,6 +8,7 @@ import { Transcript } from './components/Transcript';
 import {
   applyEvent,
   clearTranscript,
+  clearTranscriptWithNotice,
   initialUiState,
   loadHistory,
   submitUserMessage,
@@ -18,7 +19,8 @@ type UiAction =
   | { type: 'agent-event'; event: Parameters<typeof applyEvent>[1] }
   | { type: 'user-submitted'; text: string }
   | { type: 'history-loaded'; state: UiState }
-  | { type: 'approval-cleared' };
+  | { type: 'approval-cleared' }
+  | { type: 'workspace-switched'; workspace: string };
 
 function reducer(state: UiState, action: UiAction): UiState {
   switch (action.type) {
@@ -30,6 +32,9 @@ function reducer(state: UiState, action: UiAction): UiState {
       return action.state;
     case 'approval-cleared':
       return { ...state, pendingApproval: null };
+    case 'workspace-switched':
+      // 切换后已存档旧会话并新开会话：清空 transcript 并追加系统通知。
+      return clearTranscriptWithNotice(`工作区已切换至 ${action.workspace}`);
   }
 }
 
@@ -38,6 +43,7 @@ export function App() {
   const [sessions, setSessions] = useState<IpcSessionSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [config, setConfig] = useState<IpcDesktopConfig | null>(null);
+  const [workspace, setWorkspace] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const refreshSessions = useCallback(async () => {
@@ -66,6 +72,10 @@ export function App() {
     void desktop
       .getConfig()
       .then(setConfig)
+      .catch((error: unknown) => setActionError(toMessage(error)));
+    void desktop
+      .getWorkspace()
+      .then((info) => setWorkspace(info.workspace))
       .catch((error: unknown) => setActionError(toMessage(error)));
     void refreshSessions();
     return unsubscribe;
@@ -131,6 +141,22 @@ export function App() {
     [refreshSessions],
   );
 
+  const handleSelectWorkspace = useCallback(async () => {
+    try {
+      const result = await desktop.selectWorkspace();
+      if (result === null) {
+        // 用户在对话框中取消：保持现状。
+        return;
+      }
+      setWorkspace(result.workspace);
+      setActiveId(result.sessionId);
+      dispatch({ type: 'workspace-switched', workspace: result.workspace });
+      await refreshSessions();
+    } catch (error) {
+      setActionError(toMessage(error));
+    }
+  }, [refreshSessions]);
+
   const running = state.status === 'running';
 
   return (
@@ -155,6 +181,22 @@ export function App() {
             {config !== null && <span>{config.model}</span>}
           </div>
         </header>
+
+        <div className="flex items-center gap-2 border-b border-surface-border px-4 py-1.5">
+          <button
+            type="button"
+            disabled={running}
+            onClick={() => void handleSelectWorkspace()}
+            title={running ? '运行中不可切换工作区' : '选择工作区目录'}
+            className="shrink-0 rounded-(--radius-control) bg-accent px-2.5 py-1 text-xs font-medium text-surface hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            打开文件夹
+          </button>
+          <span className="truncate text-xs text-faint" title={workspace ?? undefined}>
+            {workspace ?? '加载中…'}
+          </span>
+          {running && <span className="shrink-0 text-xs text-faint">（运行中不可切换）</span>}
+        </div>
 
         <Transcript items={state.items} notice={state.notice} error={state.error} />
 

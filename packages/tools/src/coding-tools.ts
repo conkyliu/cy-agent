@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { ToolBase, ToolContract } from '@cy-agent/agent';
 import { createGitSnapshot } from './git-snapshot.js';
-import { resolveInWorkspace, SKIPPED_DIRECTORIES } from './workspace.js';
+import { resolveInWorkspaceSafe, SKIPPED_DIRECTORIES } from './workspace.js';
 
 export interface ReadFileArgs {
   path: string;
@@ -54,7 +54,7 @@ export function createReadFileTool(cwd: string): ToolContract<ReadFileArgs, stri
       required: ['path'],
     },
     execute: async (args) => {
-      const file = resolveInWorkspace(cwd, args.path);
+      const file = await resolveInWorkspaceSafe(cwd, args.path);
       const content = await fs.readFile(file, 'utf8');
       if (args.startLine === undefined && args.endLine === undefined) {
         return content;
@@ -86,7 +86,7 @@ export function createWriteFileTool(cwd: string): ToolContract<WriteFileArgs, st
       required: ['path', 'content'],
     },
     execute: async (args) => {
-      const file = resolveInWorkspace(cwd, args.path);
+      const file = await resolveInWorkspaceSafe(cwd, args.path);
       // 安全兜底：覆写已有文件前先创建 git 快照（失败静默跳过，不阻塞写入）。
       const snapshot = await snapshotBeforeOverwrite(cwd, file);
       await fs.mkdir(path.dirname(file), { recursive: true });
@@ -129,7 +129,7 @@ export function createListDirectoryTool(cwd: string): ToolContract<ListDirectory
       },
     },
     execute: async (args) => {
-      const dir = resolveInWorkspace(cwd, args.path ?? '.');
+      const dir = await resolveInWorkspaceSafe(cwd, args.path ?? '.');
       const entries = await fs.readdir(dir, { withFileTypes: true });
       if (entries.length === 0) {
         return '(empty directory)';
@@ -161,7 +161,7 @@ export function createSearchFilesTool(cwd: string): ToolContract<SearchFilesArgs
     },
     execute: async (args, signal) => {
       const regex = new RegExp(args.pattern);
-      const root = resolveInWorkspace(cwd, args.path ?? '.');
+      const root = await resolveInWorkspaceSafe(cwd, args.path ?? '.');
       const files = await collectFiles(root, signal);
 
       const matches: string[] = [];

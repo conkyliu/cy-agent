@@ -2,13 +2,15 @@
  * ipcMain 处理器注册：仅挂载白名单通道，错误统一转为 reject。
  */
 
-import { ipcMain, type WebContents } from 'electron';
+import { dialog, ipcMain, type WebContents } from 'electron';
 import { IpcChannels } from '../shared/ipc';
 import type { SessionManager } from './session-manager';
+import type { WorkspaceManager } from './workspace-manager';
 import type { DesktopRuntimeConfig } from './config';
 
 export function registerIpcHandlers(
   manager: SessionManager,
+  workspaceManager: WorkspaceManager,
   config: DesktopRuntimeConfig,
   getContents: () => WebContents | null,
 ): void {
@@ -55,4 +57,19 @@ export function registerIpcHandlers(
     workspace: config.workspace,
     configured: config.apiKey !== undefined,
   }));
+  ipcMain.handle(IpcChannels.workspaceGet, () => ({ workspace: workspaceManager.current }));
+  ipcMain.handle(IpcChannels.workspaceSelect, async () => {
+    // 系统目录选择对话框：用户取消时返回 null，不改变当前工作区。
+    const result = await dialog.showOpenDialog({
+      title: '选择工作区目录',
+      defaultPath: workspaceManager.current,
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    const selected = result.filePaths[0];
+    if (result.canceled || selected === undefined) {
+      return null;
+    }
+    // 运行中切换会在此抛错，经 invoke 转为 reject 反馈至 UI。
+    return workspaceManager.selectWorkspace(selected);
+  });
 }

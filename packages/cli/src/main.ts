@@ -5,12 +5,17 @@ import { AgentSession, ToolRegistry } from '@cy-agent/agent';
 import { OpenAICompatProvider } from '@cy-agent/openai-provider';
 import type { Message } from '@cy-agent/protocol';
 import { JsonFileSessionStore } from '@cy-agent/storage';
-import { createCodingTools, createRunShellTool } from '@cy-agent/tools';
+import {
+  buildWorkspaceOverview,
+  createCodingTools,
+  createRunShellTool,
+  withWorkspaceOverview,
+} from '@cy-agent/tools';
 import { HELP_TEXT, loadConfig, parseCliArgs, parsePositionals } from './config.js';
 import { persistSession, runRepl } from './repl.js';
 import { readStdinPrompt, runOnce } from './run-once.js';
 
-const SYSTEM_PROMPT = `You are cy-agent, a coding assistant operating inside the user's workspace.
+const BASE_SYSTEM_PROMPT = `You are cy-agent, a coding assistant operating inside the user's workspace.
 Use the provided tools (read_file, write_file, list_directory, search_files, run_shell) to inspect and modify code.
 Be concise. write_file and run_shell require explicit user approval and will be prompted automatically.`;
 
@@ -64,6 +69,12 @@ async function main(): Promise<void> {
   }
   registry.register(createRunShellTool(config.cwd));
 
+  // systemPrompt 追加工作区概览：模型首轮即预知目录结构（生成失败静默降级）。
+  const systemPrompt = withWorkspaceOverview(
+    BASE_SYSTEM_PROMPT,
+    await buildWorkspaceOverview(config.cwd),
+  );
+
   // 会话历史持久化：工作区内 .cy-agent/sessions。
   const store = new JsonFileSessionStore(path.join(config.cwd, '.cy-agent', 'sessions'));
 
@@ -83,7 +94,7 @@ async function main(): Promise<void> {
   const sessionOptions: ConstructorParameters<typeof AgentSession>[0] = {
     provider,
     registry,
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt,
   };
   if (initialMessages !== undefined) {
     sessionOptions.initialMessages = initialMessages;
@@ -114,7 +125,7 @@ async function main(): Promise<void> {
     const options: ConstructorParameters<typeof AgentSession>[0] = {
       provider,
       registry,
-      systemPrompt: SYSTEM_PROMPT,
+      systemPrompt,
     };
     if (messages !== undefined) {
       options.initialMessages = messages;

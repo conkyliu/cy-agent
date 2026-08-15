@@ -164,6 +164,11 @@ export function clearTranscript(): UiState {
   return initialUiState;
 }
 
+/** 清空 transcript 并附带系统通知（如工作区切换）。 */
+export function clearTranscriptWithNotice(notice: string): UiState {
+  return { ...initialUiState, notice };
+}
+
 /** text_chunk：追加到末尾 assistant 气泡；末尾不是 assistant 则新建。 */
 function appendText(state: UiState, text: string): UiState {
   const last = state.items[state.items.length - 1];

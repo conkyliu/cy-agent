@@ -17,6 +17,8 @@ export const IpcChannels = {
   sessionsOpen: 'sessions:open',
   sessionsDelete: 'sessions:delete',
   configGet: 'config:get',
+  workspaceGet: 'workspace:get',
+  workspaceSelect: 'workspace:select',
   /** 主进程 -> 渲染进程单向事件推送通道。 */
   agentEvent: 'agent:event',
 } as const;
@@ -69,6 +71,17 @@ export interface IpcDesktopConfig {
   configured: boolean;
 }
 
+/** `workspace:get` 载荷：当前工作区路径。 */
+export interface IpcWorkspaceInfo {
+  workspace: string;
+}
+
+/**
+ * `workspace:select` 载荷：切换成功返回新工作区与新会话 ID；
+ * 用户在目录选择对话框中取消时返回 null（不改变当前工作区）。
+ */
+export type IpcWorkspaceSelectResult = { workspace: string; sessionId: string } | null;
+
 /** preload 暴露给渲染进程的白名单 API 形状。 */
 export interface DesktopApi {
   send(text: string): Promise<void>;
@@ -81,6 +94,10 @@ export interface DesktopApi {
   openSession(id: string): Promise<{ id: string; messages: Message[] }>;
   deleteSession(id: string): Promise<void>;
   getConfig(): Promise<IpcDesktopConfig>;
+  /** 查询当前工作区路径。 */
+  getWorkspace(): Promise<IpcWorkspaceInfo>;
+  /** 打开系统目录选择对话框切换工作区；用户取消返回 null。 */
+  selectWorkspace(): Promise<IpcWorkspaceSelectResult>;
   /** 订阅 AgentEvent 流，返回退订函数。 */
   onAgentEvent(listener: (event: IpcAgentEvent) => void): () => void;
 }

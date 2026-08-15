@@ -8,12 +8,18 @@ import { app, BrowserWindow, session, shell } from 'electron';
 import { ToolRegistry } from '@cy-agent/agent';
 import { OpenAICompatProvider } from '@cy-agent/openai-provider';
 import { JsonFileSessionStore } from '@cy-agent/storage';
-import { createCodingTools, createRunShellTool } from '@cy-agent/tools';
 import { loadDesktopConfig } from './config';
 import { registerIpcHandlers } from './ipc-handlers';
 import { SessionManager } from './session-manager';
+import { WorkspaceMemory } from './workspace-memory';
+import {
+  buildSystemPrompt,
+  registerWorkspaceTools,
+  restoreWorkspace,
+  WorkspaceManager,
+} from './workspace-manager';
 
-const SYSTEM_PROMPT = `You are cy-agent, a coding assistant operating inside the user's workspace.
+const BASE_SYSTEM_PROMPT = `You are cy-agent, a coding assistant operating inside the user's workspace.
 Use the provided tools (read_file, write_file, list_directory, search_files, run_shell) to inspect and modify code.
 Be concise. write_file and run_shell require explicit user approval and will be prompted automatically.`;
 
@@ -55,7 +61,12 @@ function createWindow(): BrowserWindow {
 }
 
 function bootstrap(): void {
-  // 工作区目录：CY_AGENT_CWD 优先，缺省回退到用户 Documents。
+  // 启动装配含异步概览生成，主体放入 async 引导函数。
+  void bootstrapAsync();
+}
+
+async function bootstrapAsync(): Promise<void> {
+  // 环境变量配置：CY_AGENT_CWD 优先，缺省回退到用户 Documents。
   const config = loadDesktopConfig(process.env, app.getPath('documents'));
 
   const providerOptions: ConstructorParameters<typeof OpenAICompatProvider>[0] = {
@@ -68,24 +79,35 @@ function bootstrap(): void {
   }
   const provider = new OpenAICompatProvider(providerOptions);
 
+  // 工作区：记忆 > CY_AGENT_CWD / Documents 回退链。
+  const memory = new WorkspaceMemory(path.join(app.getPath('userData'), 'workspace.json'));
+  const workspace = restoreWorkspace(memory, config.workspace);
+
   const registry = new ToolRegistry();
-  for (const tool of createCodingTools(config.workspace)) {
-    registry.register(tool);
-  }
-  registry.register(createRunShellTool(config.workspace));
+  registerWorkspaceTools(registry, workspace);
 
   // 桌面端存档独立于工作区，放在应用 userData 下。
   const store = new JsonFileSessionStore(path.join(app.getPath('userData'), 'sessions'));
+
+  // systemPrompt 追加工作区概览：新建会话/切换工作区时重新生成。
+  const systemPrompt = await buildSystemPrompt(BASE_SYSTEM_PROMPT, workspace);
 
   const manager = new SessionManager({
     provider,
     registry,
     store,
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt,
     configured: config.apiKey !== undefined,
   });
 
-  registerIpcHandlers(manager, config, () => mainWindow?.webContents ?? null);
+  const workspaceManager = new WorkspaceManager(workspace, {
+    registry,
+    host: manager,
+    baseSystemPrompt: BASE_SYSTEM_PROMPT,
+    memory,
+  });
+
+  registerIpcHandlers(manager, workspaceManager, config, () => mainWindow?.webContents ?? null);
 
   // 拒绝所有权限请求（桌面壳层不需要摄像头/定位等）。
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => {
