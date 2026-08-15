@@ -88,6 +88,25 @@ describe('loadConfig', () => {
       loadConfig({ CY_AGENT_API_KEY: 'k' }, parseCliArgs(['--output=xml']), '/workspace'),
     ).toThrow(/Invalid --output/);
   });
+
+  it('--mcp-config 优先于 CY_AGENT_MCP_CONFIG 环境变量', () => {
+    const both = loadConfig(
+      { CY_AGENT_API_KEY: 'k', CY_AGENT_MCP_CONFIG: '/env/mcp.json' },
+      parseCliArgs(['--mcp-config=/flag/mcp.json']),
+      '/workspace',
+    );
+    expect(both.mcpConfig).toBe('/flag/mcp.json');
+
+    const envOnly = loadConfig(
+      { CY_AGENT_API_KEY: 'k', CY_AGENT_MCP_CONFIG: '/env/mcp.json' },
+      new Map(),
+      '/workspace',
+    );
+    expect(envOnly.mcpConfig).toBe('/env/mcp.json');
+
+    const none = loadConfig({ CY_AGENT_API_KEY: 'k' }, new Map(), '/workspace');
+    expect(none.mcpConfig).toBeUndefined();
+  });
 });
 
 describe('renderEvent', () => {

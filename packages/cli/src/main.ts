@@ -7,9 +7,13 @@ import type { Message } from '@cy-agent/protocol';
 import { JsonFileSessionStore } from '@cy-agent/storage';
 import {
   buildWorkspaceOverview,
+  closeMcpServers,
   createCodingTools,
+  createLoadSkillTool,
   createRunShellTool,
+  loadExtensions,
   withWorkspaceOverview,
+  type LoadExtensionsOptions,
 } from '@cy-agent/tools';
 import { HELP_TEXT, loadConfig, parseCliArgs, parsePositionals } from './config.js';
 import { persistSession, runRepl } from './repl.js';
@@ -69,11 +73,31 @@ async function main(): Promise<void> {
   }
   registry.register(createRunShellTool(config.cwd));
 
+  // 扩展装配：MCP 工具 + 本地插件 + 技能（失败降级，绝不阻塞启动）。
+  const extensionOptions: LoadExtensionsOptions = {};
+  if (config.mcpConfig !== undefined) {
+    extensionOptions.mcpConfig = config.mcpConfig;
+  }
+  const extensions = await loadExtensions(config.cwd, extensionOptions);
+  for (const tool of extensions.tools) {
+    registry.register(tool);
+  }
+  if (extensions.skills.length > 0) {
+    registry.register(createLoadSkillTool(config.cwd));
+  }
+  for (const warning of extensions.warnings) {
+    process.stderr.write(`! ${warning}\n`);
+  }
+  process.on('exit', () => closeMcpServers(extensions.mcpServers));
+
   // systemPrompt 追加工作区概览：模型首轮即预知目录结构（生成失败静默降级）。
-  const systemPrompt = withWorkspaceOverview(
+  let systemPrompt = withWorkspaceOverview(
     BASE_SYSTEM_PROMPT,
     await buildWorkspaceOverview(config.cwd),
   );
+  if (extensions.skillsSection.length > 0) {
+    systemPrompt = `${systemPrompt}\n\n${extensions.skillsSection}`;
+  }
 
   // 会话历史持久化：工作区内 .cy-agent/sessions。
   const store = new JsonFileSessionStore(path.join(config.cwd, '.cy-agent', 'sessions'));

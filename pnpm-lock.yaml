@@ -65,6 +65,9 @@ importers:
       '@cy-agent/agent':
         specifier: workspace:*
         version: link:../agent
+      '@cy-agent/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@cy-agent/openai-provider':
         specifier: workspace:*
         version: link:../openai-provider
@@ -112,6 +115,12 @@ importers:
         specifier: ^6.0.0
         version: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.33.0)
 
+  packages/mcp:
+    dependencies:
+      '@cy-agent/agent':
+        specifier: workspace:*
+        version: link:../agent
+
   packages/openai-provider:
     dependencies:
       '@cy-agent/agent':
@@ -134,6 +143,9 @@ importers:
       '@cy-agent/agent':
         specifier: workspace:*
         version: link:../agent
+      '@cy-agent/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@cy-agent/protocol':
         specifier: workspace:*
         version: link:../protocol

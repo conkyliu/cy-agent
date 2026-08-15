@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@cy-agent/agent": "workspace:*",
+    "@cy-agent/mcp": "workspace:*",
     "@cy-agent/openai-provider": "workspace:*",
     "@cy-agent/protocol": "workspace:*",
     "@cy-agent/storage": "workspace:*",

@@ -20,6 +20,8 @@ export interface CliConfig {
   output?: 'text' | 'json';
   /** 单次模式下自动批准需授权的工具调用；默认拒绝（CI 安全默认）。 */
   yes?: boolean;
+  /** MCP 配置文件路径（Claude Desktop 风格）；未设置则不加载 MCP 工具。 */
+  mcpConfig?: string;
 }
 
 export const HELP_TEXT = `cy-agent - interactive coding agent CLI
@@ -34,6 +36,7 @@ Options:
   -p, --prompt=<text>   Run the prompt once and exit (non-interactive)
   --output=<fmt>        One-shot output format: text (default) or json
   -y, --yes             Auto-approve tool calls in one-shot mode (default: deny)
+  --mcp-config=<file>   MCP servers config       (env: CY_AGENT_MCP_CONFIG)
   --model=<name>      Model name            (env: CY_AGENT_MODEL, default: gpt-4o)
   --base-url=<url>    OpenAI-compatible API (env: CY_AGENT_BASE_URL)
   --api-key=<key>     API key               (env: CY_AGENT_API_KEY or OPENAI_API_KEY)
@@ -139,6 +142,7 @@ export function loadConfig(
     throw new Error(`Invalid --output="${outputRaw}". Expected "text" or "json".`);
   }
   const yes = flags.has('yes');
+  const mcpConfig = pick(flags.get('mcp-config'), env.CY_AGENT_MCP_CONFIG);
 
   const config: CliConfig = { apiKey, model, cwd: workspace };
   if (baseUrl !== undefined) {
@@ -155,6 +159,9 @@ export function loadConfig(
   }
   if (yes) {
     config.yes = true;
+  }
+  if (mcpConfig !== undefined) {
+    config.mcpConfig = mcpConfig;
   }
   return config;
 }

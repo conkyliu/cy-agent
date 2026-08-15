@@ -13,10 +13,10 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { SessionManager } from './session-manager';
 import { WorkspaceMemory } from './workspace-memory';
 import {
-  buildSystemPrompt,
-  registerWorkspaceTools,
+  applyWorkspace,
   restoreWorkspace,
   WorkspaceManager,
+  type WorkspaceManagerOptions,
 } from './workspace-manager';
 
 const BASE_SYSTEM_PROMPT = `You are cy-agent, a coding assistant operating inside the user's workspace.
@@ -84,27 +84,40 @@ async function bootstrapAsync(): Promise<void> {
   const workspace = restoreWorkspace(memory, config.workspace);
 
   const registry = new ToolRegistry();
-  registerWorkspaceTools(registry, workspace);
 
   // 桌面端存档独立于工作区，放在应用 userData 下。
   const store = new JsonFileSessionStore(path.join(app.getPath('userData'), 'sessions'));
 
-  // systemPrompt 追加工作区概览：新建会话/切换工作区时重新生成。
-  const systemPrompt = await buildSystemPrompt(BASE_SYSTEM_PROMPT, workspace);
+  // 应用工作区：内置工具 + 扩展（MCP/插件/技能）+ systemPrompt（含概览与技能段）。
+  const mcpConfig = process.env.CY_AGENT_MCP_CONFIG;
+  const hasMcpConfig = mcpConfig !== undefined && mcpConfig.length > 0;
+  const prepared = await applyWorkspace(registry, workspace, BASE_SYSTEM_PROMPT, {
+    ...(hasMcpConfig && mcpConfig !== undefined ? { mcpConfig } : {}),
+  });
+  for (const warning of prepared.warnings) {
+    console.warn(`[extensions] ${warning}`);
+  }
 
   const manager = new SessionManager({
     provider,
     registry,
     store,
-    systemPrompt,
+    systemPrompt: prepared.systemPrompt,
     configured: config.apiKey !== undefined,
   });
 
-  const workspaceManager = new WorkspaceManager(workspace, {
+  const workspaceManagerOptions: WorkspaceManagerOptions = {
     registry,
     host: manager,
     baseSystemPrompt: BASE_SYSTEM_PROMPT,
     memory,
+  };
+  if (hasMcpConfig && mcpConfig !== undefined) {
+    workspaceManagerOptions.mcpConfig = mcpConfig;
+  }
+  const workspaceManager = new WorkspaceManager(workspace, workspaceManagerOptions, {
+    extensionToolNames: prepared.extensionToolNames,
+    mcpServers: prepared.mcpServers,
   });
 
   registerIpcHandlers(manager, workspaceManager, config, () => mainWindow?.webContents ?? null);

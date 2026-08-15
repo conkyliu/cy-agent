@@ -1,8 +1,8 @@
 {
-  "name": "@cy-agent/tools",
+  "name": "@cy-agent/mcp",
   "version": "0.0.0",
   "type": "module",
-  "description": "Built-in coding tools: file read/write, directory listing, content search",
+  "description": "Minimal MCP (Model Context Protocol) stdio client and tool adapters",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -14,8 +14,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@cy-agent/agent": "workspace:*",
-    "@cy-agent/mcp": "workspace:*",
-    "@cy-agent/protocol": "workspace:*"
+    "@cy-agent/agent": "workspace:*"
   }
 }
