@@ -23,6 +23,22 @@ export {
 } from './skills.js';
 export { loadPluginTools, type PluginFactory, type PluginLoadResult } from './plugins.js';
 export {
+  buildSymbolIndex,
+  buildSymbolIndexSection,
+  MAX_FILE_SIZE_BYTES,
+  type LanguageExtractor,
+  type SymbolEntry,
+  type SymbolIndex,
+  type SymbolIndexOptions,
+  type SymbolKind,
+} from './symbol-index.js';
+export {
+  createFileDependenciesTool,
+  createFindSymbolTool,
+  type FileDependenciesArgs,
+  type FindSymbolArgs,
+} from './navigation.js';
+export {
   closeMcpServers,
   loadExtensions,
   type Extensions,

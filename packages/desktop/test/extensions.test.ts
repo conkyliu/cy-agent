@@ -109,4 +109,32 @@ describe('扩展装配（desktop）', () => {
     // 内置工具仍在。
     expect(registry.get('read_file')).toBeDefined();
   });
+
+  it('切换到含源码的工作区后重建符号索引并注册导航工具', async () => {
+    await writeFile(path.join(workspaceB, 'app.ts'), 'export class Greeter {}', 'utf8');
+
+    const registry = new ToolRegistry();
+    const host = fakeHost();
+    const initial = await applyWorkspace(registry, workspaceA, 'base');
+    expect(registry.get('find_symbol')).toBeUndefined();
+
+    const manager = new WorkspaceManager(
+      workspaceA,
+      { registry, host, baseSystemPrompt: 'base' },
+      {
+        extensionToolNames: initial.extensionToolNames,
+        mcpServers: initial.mcpServers,
+      },
+    );
+
+    await manager.selectWorkspace(workspaceB);
+    const findSymbol = registry.get('find_symbol');
+    expect(findSymbol).toBeDefined();
+    expect(registry.get('file_dependencies')).toBeDefined();
+    // 查询返回新工作区的符号定义。
+    const result = await findSymbol?.execute({ name: 'Greeter' });
+    expect(result).toContain('app.ts:1 [class]');
+    // systemPrompt 含符号索引行。
+    expect(host.prompts.at(-1)).toContain('Symbol index:');
+  });
 });

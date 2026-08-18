@@ -10,6 +10,7 @@ import path from 'node:path';
 import type { ToolRegistry } from '@cy-agent/agent';
 import type { McpLoadedServer } from '@cy-agent/mcp';
 import {
+  buildSymbolIndexSection,
   buildWorkspaceOverview,
   closeMcpServers,
   createCodingTools,
@@ -81,17 +82,21 @@ export function restoreWorkspace(memory: WorkspaceMemory | undefined, fallback: 
 
 /**
  * 拼装含工作区概览的 systemPrompt（概览生成内部已容错，绝不抛错）；
- * 可选追加技能清单段（无技能时 skillsSection 为空串，原样返回）。
+ * 可选追加技能清单段与符号索引行（为空串时不拼接）。
  */
 export async function buildSystemPrompt(
   baseSystemPrompt: string,
   workspace: string,
   skillsSection = '',
+  symbolSection = '',
 ): Promise<string> {
   const overview = await buildWorkspaceOverview(workspace);
   let prompt = withWorkspaceOverview(baseSystemPrompt, overview);
   if (skillsSection.length > 0) {
     prompt = `${prompt}\n\n${skillsSection}`;
+  }
+  if (symbolSection.length > 0) {
+    prompt = `${prompt}\n\n${symbolSection}`;
   }
   return prompt;
 }
@@ -140,6 +145,7 @@ export async function applyWorkspace(
     baseSystemPrompt,
     workspace,
     extensions.skillsSection,
+    buildSymbolIndexSection(extensions.symbolIndex),
   );
   return {
     systemPrompt,

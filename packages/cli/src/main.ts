@@ -6,6 +6,7 @@ import { OpenAICompatProvider } from '@cy-agent/openai-provider';
 import type { Message } from '@cy-agent/protocol';
 import { JsonFileSessionStore } from '@cy-agent/storage';
 import {
+  buildSymbolIndexSection,
   buildWorkspaceOverview,
   closeMcpServers,
   createCodingTools,
@@ -97,6 +98,10 @@ async function main(): Promise<void> {
   );
   if (extensions.skillsSection.length > 0) {
     systemPrompt = `${systemPrompt}\n\n${extensions.skillsSection}`;
+  }
+  const symbolSection = buildSymbolIndexSection(extensions.symbolIndex);
+  if (symbolSection.length > 0) {
+    systemPrompt = `${systemPrompt}\n\n${symbolSection}`;
   }
 
   // 会话历史持久化：工作区内 .cy-agent/sessions。

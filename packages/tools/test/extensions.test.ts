@@ -134,3 +134,23 @@ describe('loadExtensions', () => {
     expect(extensions.tools).toHaveLength(0);
   });
 });
+
+describe('loadExtensions 符号索引', () => {
+  it('有源码时注册导航工具并返回 symbolIndex', async () => {
+    await fs.writeFile(path.join(workspace, 'app.ts'), 'export class App {}', 'utf8');
+    const extensions = await loadExtensions(workspace);
+    const names = extensions.tools.map((item) => item.name);
+    expect(names).toContain('find_symbol');
+    expect(names).toContain('file_dependencies');
+    expect(extensions.symbolIndex.entries.map((entry) => entry.name)).toContain('App');
+  });
+
+  it('无源码工作区不注册导航工具', async () => {
+    await fs.writeFile(path.join(workspace, 'readme.txt'), 'hi', 'utf8');
+    const extensions = await loadExtensions(workspace);
+    const names = extensions.tools.map((item) => item.name);
+    expect(names).not.toContain('find_symbol');
+    expect(names).not.toContain('file_dependencies');
+    expect(extensions.symbolIndex.entries).toHaveLength(0);
+  });
+});

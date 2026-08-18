@@ -1,7 +1,9 @@
 import type { ToolBase } from '@cy-agent/agent';
 import { loadMcpTools, readMcpConfig, type McpLoadedServer } from '@cy-agent/mcp';
+import { createFileDependenciesTool, createFindSymbolTool } from './navigation.js';
 import { loadPluginTools } from './plugins.js';
 import { buildSkillsOverviewSection, listSkills, type SkillInfo } from './skills.js';
+import { buildSymbolIndex, type SymbolIndex } from './symbol-index.js';
 
 export interface LoadExtensionsOptions {
   /** MCP 配置文件路径（Claude Desktop 风格）；未提供则跳过 MCP。 */
@@ -17,6 +19,8 @@ export interface Extensions {
   skillsSection: string;
   /** 已连接的 MCP server 句柄（宿主退出/切换时关闭）。 */
   mcpServers: McpLoadedServer[];
+  /** 工作区符号索引（供概览行与导航工具；空工作区时 entries 为空）。 */
+  symbolIndex: SymbolIndex;
   /** 加载告警（坏插件/坏 server），宿主应展示给用户。 */
   warnings: string[];
 }
@@ -50,12 +54,26 @@ export async function loadExtensions(
   tools.push(...plugins.tools);
   warnings.push(...plugins.warnings);
 
+  // 符号索引：有界容错构建，异常降级为空索引（导航工具不注册）。
+  let symbolIndex: SymbolIndex;
+  try {
+    symbolIndex = await buildSymbolIndex(workspace);
+  } catch (error) {
+    symbolIndex = { entries: [], filesIndexed: 0, truncated: false };
+    const message = error instanceof Error ? error.message : String(error);
+    warnings.push(`Symbol index not built: ${message}`);
+  }
+  if (symbolIndex.entries.length > 0) {
+    tools.push(createFindSymbolTool(symbolIndex), createFileDependenciesTool(workspace));
+  }
+
   const skills = await listSkills(workspace);
   return {
     tools,
     skills,
     skillsSection: buildSkillsOverviewSection(skills),
     mcpServers,
+    symbolIndex,
     warnings,
   };
 }

@@ -48,4 +48,4 @@ Headless Agent 运行时。核心与任何 UI / 框架 / 宿主环境（CLI、El
 - Phase 3 Desktop Shell（已完成：add-desktop-shell，含三平台打包与 CI 发布）
 - Phase 4 代码工作区（已完成：add-code-workspace，含符号链接沙箱、工作区切换与概览注入）
 - Phase 5 扩展能力（已完成：add-extension-system，MCP / 技能 / 本地插件）
-- Phase 6 高级上下文（符号索引 / 依赖图）
+- Phase 6 高级上下文（已完成：add-code-navigation，符号索引 / 依赖解析）
