@@ -22,6 +22,8 @@
   },
   "dependencies": {
     "@cy-agent/agent": "workspace:*",
+    "@cy-agent/anthropic-provider": "workspace:*",
+    "@cy-agent/gemini-provider": "workspace:*",
     "@cy-agent/mcp": "workspace:*",
     "@cy-agent/openai-provider": "workspace:*",
     "@cy-agent/protocol": "workspace:*",

@@ -5,7 +5,9 @@
 import path from 'node:path';
 import process from 'node:process';
 import { app, BrowserWindow, session, shell } from 'electron';
-import { ToolRegistry } from '@cy-agent/agent';
+import { ToolRegistry, type ProviderContract } from '@cy-agent/agent';
+import { AnthropicProvider } from '@cy-agent/anthropic-provider';
+import { GeminiProvider } from '@cy-agent/gemini-provider';
 import { OpenAICompatProvider } from '@cy-agent/openai-provider';
 import { JsonFileSessionStore } from '@cy-agent/storage';
 import { loadDesktopConfig } from './config';
@@ -69,15 +71,31 @@ async function bootstrapAsync(): Promise<void> {
   // 环境变量配置：CY_AGENT_CWD 优先，缺省回退到用户 Documents。
   const config = loadDesktopConfig(process.env, app.getPath('documents'));
 
-  const providerOptions: ConstructorParameters<typeof OpenAICompatProvider>[0] = {
-    // Key 缺失时占位构造，send 阶段以 session_error 反馈（configured=false）。
-    apiKey: config.apiKey ?? 'missing',
-    model: config.model,
-  };
-  if (config.baseUrl !== undefined) {
-    providerOptions.baseUrl = config.baseUrl;
+  let provider: ProviderContract;
+  const apiKey = config.apiKey ?? 'missing';
+  if (config.provider === 'anthropic') {
+    provider = new AnthropicProvider({
+      apiKey,
+      model: config.model,
+      ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+    });
+  } else if (config.provider === 'gemini') {
+    provider = new GeminiProvider({
+      apiKey,
+      model: config.model,
+      ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+    });
+  } else {
+    const providerOptions: ConstructorParameters<typeof OpenAICompatProvider>[0] = {
+      // Key 缺失时占位构造，send 阶段以 session_error 反馈（configured=false）。
+      apiKey,
+      model: config.model,
+    };
+    if (config.baseUrl !== undefined) {
+      providerOptions.baseUrl = config.baseUrl;
+    }
+    provider = new OpenAICompatProvider(providerOptions);
   }
-  const provider = new OpenAICompatProvider(providerOptions);
 
   // 工作区：记忆 > CY_AGENT_CWD / Documents 回退链。
   const memory = new WorkspaceMemory(path.join(app.getPath('userData'), 'workspace.json'));

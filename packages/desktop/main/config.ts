@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 export interface DesktopRuntimeConfig {
+  provider?: 'openai' | 'anthropic' | 'gemini' | string;
   /** 缺失时不崩溃，send 时经事件流反馈 session_error。 */
   apiKey?: string;
   model: string;
@@ -18,8 +19,11 @@ export interface DesktopRuntimeConfig {
 
 /** 配置加载需要关注的变量（缺失时尝试从 shell 配置文件补充）。 */
 const CONFIG_KEYS = [
+  'CY_AGENT_PROVIDER',
   'CY_AGENT_API_KEY',
   'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'GEMINI_API_KEY',
   'CY_AGENT_MODEL',
   'CY_AGENT_BASE_URL',
   'CY_AGENT_CWD',
@@ -29,11 +33,16 @@ const CONFIG_KEYS = [
 function resolveConfigEnv(
   env: Record<string, string | undefined>,
 ): Record<string, string | undefined> {
-  const missing = CONFIG_KEYS.filter((key) => env[key] === undefined || env[key] === '');
-  if (!missing.includes('CY_AGENT_API_KEY') && !missing.includes('OPENAI_API_KEY')) {
+  const hasKey =
+    Boolean(env.CY_AGENT_API_KEY) ||
+    Boolean(env.OPENAI_API_KEY) ||
+    Boolean(env.ANTHROPIC_API_KEY) ||
+    Boolean(env.GEMINI_API_KEY);
+  if (hasKey) {
     // API Key 已就绪，其余变量缺失不影响可用性，避免多余的文件解析。
     return env;
   }
+  const missing = CONFIG_KEYS.filter((key) => env[key] === undefined || env[key] === '');
   // shell 配置文件值仅作回退：进程环境中非空值优先。
   const merged: Record<string, string | undefined> = { ...env };
   for (const [key, value] of Object.entries(readShellConfigExports(missing))) {
@@ -98,12 +107,49 @@ export function loadDesktopConfig(
   defaultWorkspace: string,
 ): DesktopRuntimeConfig {
   const resolved = resolveConfigEnv(env);
-  const model = pick(resolved.CY_AGENT_MODEL) ?? 'gpt-4o';
+  const rawProvider = pick(resolved.CY_AGENT_PROVIDER)?.toLowerCase();
+  const rawModel = pick(resolved.CY_AGENT_MODEL);
+
+  let provider: 'openai' | 'anthropic' | 'gemini' | string;
+  if (rawProvider) {
+    provider = rawProvider;
+  } else if (rawModel?.startsWith('claude')) {
+    provider = 'anthropic';
+  } else if (rawModel?.startsWith('gemini')) {
+    provider = 'gemini';
+  } else if (resolved.ANTHROPIC_API_KEY && !resolved.OPENAI_API_KEY && !resolved.CY_AGENT_API_KEY) {
+    provider = 'anthropic';
+  } else if (resolved.GEMINI_API_KEY && !resolved.OPENAI_API_KEY && !resolved.CY_AGENT_API_KEY) {
+    provider = 'gemini';
+  } else {
+    provider = 'openai';
+  }
+
+  let apiKey: string | undefined;
+  if (provider === 'anthropic') {
+    apiKey = pick(resolved.CY_AGENT_API_KEY, resolved.ANTHROPIC_API_KEY, resolved.OPENAI_API_KEY);
+  } else if (provider === 'gemini') {
+    apiKey = pick(resolved.CY_AGENT_API_KEY, resolved.GEMINI_API_KEY, resolved.OPENAI_API_KEY);
+  } else {
+    apiKey = pick(
+      resolved.CY_AGENT_API_KEY,
+      resolved.OPENAI_API_KEY,
+      resolved.ANTHROPIC_API_KEY,
+      resolved.GEMINI_API_KEY,
+    );
+  }
+
+  const model =
+    rawModel ??
+    (provider === 'anthropic'
+      ? 'claude-3-7-sonnet-20250219'
+      : provider === 'gemini'
+        ? 'gemini-2.0-flash'
+        : 'gpt-4o');
   const workspace = pick(resolved.CY_AGENT_CWD) ?? defaultWorkspace;
-  const apiKey = pick(resolved.CY_AGENT_API_KEY, resolved.OPENAI_API_KEY);
   const baseUrl = pick(resolved.CY_AGENT_BASE_URL);
 
-  const config: DesktopRuntimeConfig = { model, workspace };
+  const config: DesktopRuntimeConfig = { provider, model, workspace };
   if (apiKey !== undefined) {
     config.apiKey = apiKey;
   }

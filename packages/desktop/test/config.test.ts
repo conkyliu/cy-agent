@@ -79,4 +79,19 @@ describe('loadDesktopConfig 环境变量回退', () => {
     const config = loadDesktopConfig({ CY_AGENT_API_KEY: '' }, '/Documents');
     expect(config.apiKey).toBe('sk-from-rc');
   });
+
+  it('支持 Anthropic 与 Gemini 环境变量解析与 Provider 推断', () => {
+    const antConfig = loadDesktopConfig({ ANTHROPIC_API_KEY: 'sk-ant-rc' }, '/Documents');
+    expect(antConfig.provider).toBe('anthropic');
+    expect(antConfig.apiKey).toBe('sk-ant-rc');
+    expect(antConfig.model).toBe('claude-3-7-sonnet-20250219');
+
+    const geminiConfig = loadDesktopConfig(
+      { GEMINI_API_KEY: 'gem-rc', CY_AGENT_MODEL: 'gemini-2.5-pro' },
+      '/Documents',
+    );
+    expect(geminiConfig.provider).toBe('gemini');
+    expect(geminiConfig.apiKey).toBe('gem-rc');
+    expect(geminiConfig.model).toBe('gemini-2.5-pro');
+  });
 });

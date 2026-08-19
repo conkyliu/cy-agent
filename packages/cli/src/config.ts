@@ -6,9 +6,10 @@
  */
 
 export interface CliConfig {
+  provider?: 'openai' | 'anthropic' | 'gemini' | string;
   apiKey: string;
   model: string;
-  /** 未设置时使用 Provider 默认端点（OpenAI 官方）。 */
+  /** 未设置时使用 Provider 默认端点。 */
   baseUrl?: string;
   /** 编码工具沙箱根目录，默认当前工作目录。 */
   cwd: string;
@@ -36,13 +37,14 @@ Options:
   -p, --prompt=<text>   Run the prompt once and exit (non-interactive)
   --output=<fmt>        One-shot output format: text (default) or json
   -y, --yes             Auto-approve tool calls in one-shot mode (default: deny)
+  --provider=<type>     Provider type: openai (default), anthropic, gemini (env: CY_AGENT_PROVIDER)
   --mcp-config=<file>   MCP servers config       (env: CY_AGENT_MCP_CONFIG)
-  --model=<name>      Model name            (env: CY_AGENT_MODEL, default: gpt-4o)
-  --base-url=<url>    OpenAI-compatible API (env: CY_AGENT_BASE_URL)
-  --api-key=<key>     API key               (env: CY_AGENT_API_KEY or OPENAI_API_KEY)
-  --cwd=<dir>         Workspace directory   (default: process.cwd())
-  --resume=<id>       Resume a saved session (see /sessions)
-  --help              Show this help
+  --model=<name>        Model name               (env: CY_AGENT_MODEL, default: gpt-4o)
+  --base-url=<url>      Custom API base URL      (env: CY_AGENT_BASE_URL)
+  --api-key=<key>       API key                  (env: CY_AGENT_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY)
+  --cwd=<dir>           Workspace directory      (default: process.cwd())
+  --resume=<id>         Resume a saved session (see /sessions)
+  --help                Show this help
 
 Exit codes (one-shot mode):
   0    session completed
@@ -125,14 +127,62 @@ export function loadConfig(
   flags: ReadonlyMap<string, string>,
   cwd: string,
 ): CliConfig {
-  const apiKey = pick(flags.get('api-key'), env.CY_AGENT_API_KEY, env.OPENAI_API_KEY);
-  if (apiKey === undefined || apiKey.length === 0) {
-    throw new Error(
-      'Missing API key. Set CY_AGENT_API_KEY / OPENAI_API_KEY or pass --api-key=<key>.',
+  const rawProvider = pick(flags.get('provider'), env.CY_AGENT_PROVIDER)?.toLowerCase();
+  const rawModel = pick(flags.get('model'), env.CY_AGENT_MODEL);
+
+  let provider: 'openai' | 'anthropic' | 'gemini' | string;
+  if (rawProvider) {
+    provider = rawProvider;
+  } else if (rawModel?.startsWith('claude')) {
+    provider = 'anthropic';
+  } else if (rawModel?.startsWith('gemini')) {
+    provider = 'gemini';
+  } else if (env.ANTHROPIC_API_KEY && !env.OPENAI_API_KEY && !env.CY_AGENT_API_KEY) {
+    provider = 'anthropic';
+  } else if (env.GEMINI_API_KEY && !env.OPENAI_API_KEY && !env.CY_AGENT_API_KEY) {
+    provider = 'gemini';
+  } else {
+    provider = 'openai';
+  }
+
+  let apiKey: string | undefined;
+  if (provider === 'anthropic') {
+    apiKey = pick(
+      flags.get('api-key'),
+      env.CY_AGENT_API_KEY,
+      env.ANTHROPIC_API_KEY,
+      env.OPENAI_API_KEY,
+    );
+  } else if (provider === 'gemini') {
+    apiKey = pick(
+      flags.get('api-key'),
+      env.CY_AGENT_API_KEY,
+      env.GEMINI_API_KEY,
+      env.OPENAI_API_KEY,
+    );
+  } else {
+    apiKey = pick(
+      flags.get('api-key'),
+      env.CY_AGENT_API_KEY,
+      env.OPENAI_API_KEY,
+      env.ANTHROPIC_API_KEY,
+      env.GEMINI_API_KEY,
     );
   }
 
-  const model = pick(flags.get('model'), env.CY_AGENT_MODEL) ?? 'gpt-4o';
+  if (apiKey === undefined || apiKey.length === 0) {
+    throw new Error(
+      'Missing API key. Set CY_AGENT_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY or pass --api-key=<key>.',
+    );
+  }
+
+  const model =
+    rawModel ??
+    (provider === 'anthropic'
+      ? 'claude-3-7-sonnet-20250219'
+      : provider === 'gemini'
+        ? 'gemini-2.0-flash'
+        : 'gpt-4o');
   const baseUrl = pick(flags.get('base-url'), env.CY_AGENT_BASE_URL);
   const workspace = pick(flags.get('cwd')) ?? cwd;
   const resume = pick(flags.get('resume'));
@@ -144,7 +194,7 @@ export function loadConfig(
   const yes = flags.has('yes');
   const mcpConfig = pick(flags.get('mcp-config'), env.CY_AGENT_MCP_CONFIG);
 
-  const config: CliConfig = { apiKey, model, cwd: workspace };
+  const config: CliConfig = { provider, apiKey, model, cwd: workspace };
   if (baseUrl !== undefined) {
     config.baseUrl = baseUrl;
   }

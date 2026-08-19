@@ -17,7 +17,7 @@
 - **LLM 驱动的上下文压缩**：超过阈值时由模型将历史总结为摘要消息，原地替换上下文，失败静默回退裁剪
 - **可中断**：通过 AbortController 全链路传播取消信号，随时安全中断会话
 - **Token 用量跟踪**：解析模型端点返回的真实 usage 统计，每轮会话结束后显示 `Tokens: N in / M out`
-- **OpenAI 兼容 Provider**：支持任意 OpenAI 兼容端点（可通过 `--base-url` 指定）
+- **多模型原生 Provider 支持**：内置 OpenAI 兼容端点、Anthropic Claude 原生 Messages API、Google Gemini 原生 REST API 提供商，支持按环境变量或模型名智能自动路由
 - **Electron 桌面壳层**：主进程承载运行时，React 渲染层消费事件流，提供 HITL 授权卡片、流式渲染、多会话侧边栏与工作区切换（三平台打包：macOS / Windows / Linux）
 - **代码工作区一等公民**：systemPrompt 自动注入工作区概览（目录树 + git 分支 + 标记文件），模型首轮即预知项目结构
 - **扩展体系**：MCP（stdio 客户端）、技能（`.cy-agent/skills/*.md` 按需加载）、本地插件（`.cy-agent/plugins/*.mjs`）三类扩展统一经 `ToolRegistry` 挂载，加载失败降级不阻塞启动
@@ -27,16 +27,18 @@
 ```
 cy-agent/
 ├── packages/
-│   ├── protocol/         # 跨包统一数据协议（Message / AgentEvent）
-│   ├── agent/            # 核心运行时：AgentSession、工具注册表、上下文预算与压缩
-│   ├── tools/            # 内置工具实现（文件操作、Shell 执行、工作区概览、扩展装配）
-│   ├── openai-provider/  # OpenAI 兼容模型提供商
-│   ├── storage/          # 会话持久化存储
-│   ├── mcp/              # MCP（Model Context Protocol）stdio 客户端
-│   ├── cli/              # CLI（交互式 REPL + 非交互单次执行，@cy-agent/cli）
-│   └── desktop/          # Electron 桌面壳层（主进程 / preload / React 渲染层）
-├── openspec/             # OpenSpec 增量规格与变更档案
-├── spec.md               # 运行时核心规范
+│   ├── protocol/            # 跨包统一数据协议（Message / AgentEvent）
+│   ├── agent/               # 核心运行时：AgentSession、工具注册表、上下文预算与压缩
+│   ├── tools/               # 内置工具实现（文件操作、Shell 执行、工作区概览、扩展装配）
+│   ├── openai-provider/     # OpenAI 兼容模型提供商
+│   ├── anthropic-provider/  # Anthropic Claude 原生模型提供商
+│   ├── gemini-provider/     # Google Gemini 原生模型提供商
+│   ├── storage/             # 会话持久化存储
+│   ├── mcp/                 # MCP（Model Context Protocol）stdio 客户端
+│   ├── cli/                 # CLI（交互式 REPL + 非交互单次执行，@cy-agent/cli）
+│   └── desktop/             # Electron 桌面壳层（主进程 / preload / React 渲染层）
+├── openspec/                # OpenSpec 增量规格与变更档案
+├── spec.md                  # 运行时核心规范
 └── vitest.config.ts
 ```
 
@@ -64,11 +66,13 @@ pnpm typecheck   # 全量类型检查
 ### 使用 CLI
 
 ```bash
-# 交互模式（REPL）
-node packages/cli/dist/main.js --base-url <模型端点> --api-key <密钥> --model <模型名>
+# 交互模式（REPL，可指定 Provider 与模型）
+cy-agent --provider=anthropic --model=claude-3-7-sonnet-20250219
+cy-agent --provider=gemini --model=gemini-2.0-flash
+cy-agent --base-url <模型端点> --api-key <密钥> --model <模型名>
 
 # 恢复历史会话
-node packages/cli/dist/main.js --resume <会话ID>
+cy-agent --resume <会话ID>
 
 # 非交互单次执行（脚本 / CI）
 cy-agent -p "梳理本项目的目录结构"
@@ -84,9 +88,10 @@ cy-agent -p "..." -y              # 自动批准工具调用（默认拒绝，CI
 
 | 参数 | 环境变量 | 说明 |
 | --- | --- | --- |
-| `--base-url=<url>` | `CY_AGENT_BASE_URL` | OpenAI 兼容 API 端点 |
-| `--api-key=<key>` | `CY_AGENT_API_KEY` / `OPENAI_API_KEY` | API 密钥 |
-| `--model=<name>` | `CY_AGENT_MODEL` | 模型名（默认 gpt-4o） |
+| `--provider=<type>` | `CY_AGENT_PROVIDER` | 提供商类型：`openai`（默认）、`anthropic`、`gemini` |
+| `--base-url=<url>` | `CY_AGENT_BASE_URL` | 自定义 API 端点 |
+| `--api-key=<key>` | `CY_AGENT_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | API 密钥 |
+| `--model=<name>` | `CY_AGENT_MODEL` | 模型名（默认 gpt-4o / claude-3-7-sonnet / gemini-2.0-flash） |
 | `--cwd=<dir>` | — | 工作区目录（默认当前目录） |
 | `--mcp-config=<file>` | `CY_AGENT_MCP_CONFIG` | MCP 服务器配置文件 |
 | `--resume=<id>` | — | 恢复指定历史会话 |
@@ -104,7 +109,7 @@ REPL 常用命令：`/sessions` 查看会话列表、`/new` 新建会话、`/ope
 
 ### 桌面端
 
-Electron 桌面壳层复用 CLI 的环境变量约定（base URL / API key / model）：
+Electron 桌面壳层复用 CLI 的环境变量约定（base URL / API key / model / provider）：
 
 ```bash
 pnpm desktop:dev      # 开发模式（Vite dev server 热更新）
@@ -143,6 +148,8 @@ pnpm desktop:release  # 构建并发布安装包（macOS dmg / Windows / Linux�
 | Phase 3 | Electron 桌面壳层（IPC 桥、授权 UI、事件流渲染、三平台打包） | ✅ |
 | Phase 4 | 代码工作区（工作区切换、概览注入、符号链接逃逸防护） | ✅ |
 | Phase 5 | 扩展体系（MCP / 技能 / 插件） | ✅ |
+| Phase 6 | 高级上下文（符号索引 / 依赖解析） | ✅ |
+| Phase 7 | 原生多 Provider 支持（Anthropic Claude / Google Gemini 原生流式协议） | ✅ |
 
 ## License
 

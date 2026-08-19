@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import path from 'node:path';
 import process from 'node:process';
-import { AgentSession, ToolRegistry } from '@cy-agent/agent';
+import { AgentSession, ToolRegistry, type ProviderContract } from '@cy-agent/agent';
+import { AnthropicProvider } from '@cy-agent/anthropic-provider';
+import { GeminiProvider } from '@cy-agent/gemini-provider';
 import { OpenAICompatProvider } from '@cy-agent/openai-provider';
 import type { Message } from '@cy-agent/protocol';
 import { JsonFileSessionStore } from '@cy-agent/storage';
@@ -59,14 +61,29 @@ async function main(): Promise<void> {
     return;
   }
 
-  const providerOptions: ConstructorParameters<typeof OpenAICompatProvider>[0] = {
-    apiKey: config.apiKey,
-    model: config.model,
-  };
-  if (config.baseUrl !== undefined) {
-    providerOptions.baseUrl = config.baseUrl;
+  let provider: ProviderContract;
+  if (config.provider === 'anthropic') {
+    provider = new AnthropicProvider({
+      apiKey: config.apiKey,
+      model: config.model,
+      ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+    });
+  } else if (config.provider === 'gemini') {
+    provider = new GeminiProvider({
+      apiKey: config.apiKey,
+      model: config.model,
+      ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+    });
+  } else {
+    const providerOptions: ConstructorParameters<typeof OpenAICompatProvider>[0] = {
+      apiKey: config.apiKey,
+      model: config.model,
+    };
+    if (config.baseUrl !== undefined) {
+      providerOptions.baseUrl = config.baseUrl;
+    }
+    provider = new OpenAICompatProvider(providerOptions);
   }
-  const provider = new OpenAICompatProvider(providerOptions);
 
   const registry = new ToolRegistry();
   for (const tool of createCodingTools(config.cwd)) {

@@ -107,6 +107,26 @@ describe('loadConfig', () => {
     const none = loadConfig({ CY_AGENT_API_KEY: 'k' }, new Map(), '/workspace');
     expect(none.mcpConfig).toBeUndefined();
   });
+
+  it('支持 --provider 与多 Provider 自动推断与 API Key 读取', () => {
+    const antConfig = loadConfig(
+      { ANTHROPIC_API_KEY: 'sk-ant-test' },
+      parseCliArgs(['--model=claude-3-7-sonnet']),
+      '/workspace',
+    );
+    expect(antConfig.provider).toBe('anthropic');
+    expect(antConfig.apiKey).toBe('sk-ant-test');
+    expect(antConfig.model).toBe('claude-3-7-sonnet');
+
+    const geminiConfig = loadConfig(
+      { GEMINI_API_KEY: 'gem-key' },
+      parseCliArgs(['--provider=gemini']),
+      '/workspace',
+    );
+    expect(geminiConfig.provider).toBe('gemini');
+    expect(geminiConfig.apiKey).toBe('gem-key');
+    expect(geminiConfig.model).toBe('gemini-2.0-flash');
+  });
 });
 
 describe('renderEvent', () => {

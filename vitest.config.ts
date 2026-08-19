@@ -11,6 +11,8 @@ export default defineConfig({
       '@cy-agent/tools': here('./packages/tools/src/index.ts'),
       '@cy-agent/mcp': here('./packages/mcp/src/index.ts'),
       '@cy-agent/openai-provider': here('./packages/openai-provider/src/index.ts'),
+      '@cy-agent/anthropic-provider': here('./packages/anthropic-provider/src/index.ts'),
+      '@cy-agent/gemini-provider': here('./packages/gemini-provider/src/index.ts'),
       '@cy-agent/cli': here('./packages/cli/src/index.ts'),
       '@cy-agent/storage': here('./packages/storage/src/index.ts'),
     },
