@@ -91,8 +91,10 @@ async function main(): Promise<void> {
   }
   registry.register(createRunShellTool(config.cwd));
 
-  // 扩展装配：MCP 工具 + 本地插件 + 技能（失败降级，绝不阻塞启动）。
-  const extensionOptions: LoadExtensionsOptions = {};
+  // 扩展装配：MCP 工具 + 本地插件 + 技能 + Sub-agent（失败降级，绝不阻塞启动）。
+  const extensionOptions: LoadExtensionsOptions = {
+    provider,
+  };
   if (config.mcpConfig !== undefined) {
     extensionOptions.mcpConfig = config.mcpConfig;
   }

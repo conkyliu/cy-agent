@@ -7,7 +7,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ToolRegistry } from '@cy-agent/agent';
+import type { ProviderContract, ToolRegistry } from '@cy-agent/agent';
 import type { McpLoadedServer } from '@cy-agent/mcp';
 import {
   buildSymbolIndexSection,
@@ -44,9 +44,11 @@ export interface WorkspaceManagerOptions {
   host: WorkspaceSessionHost;
   /** 不含工作区概览的基础 systemPrompt。 */
   baseSystemPrompt: string;
-  memory?: WorkspaceMemory;
+  memory?: WorkspaceMemory | undefined;
   /** MCP 配置文件路径；未提供则不加载 MCP 工具。 */
-  mcpConfig?: string;
+  mcpConfig?: string | undefined;
+  /** 当前 Provider 实例（用于注册 delegate_task 等子智能体工具）。 */
+  provider?: ProviderContract | undefined;
 }
 
 /** 应用工作区后的装配结果（供宿主与后续切换清理使用）。 */
@@ -110,9 +112,10 @@ export async function applyWorkspace(
   workspace: string,
   baseSystemPrompt: string,
   options: {
-    mcpConfig?: string;
-    previousExtensionToolNames?: string[];
-    previousMcpServers?: McpLoadedServer[];
+    mcpConfig?: string | undefined;
+    provider?: ProviderContract | undefined;
+    previousExtensionToolNames?: string[] | undefined;
+    previousMcpServers?: McpLoadedServer[] | undefined;
   } = {},
 ): Promise<PreparedWorkspace> {
   for (const name of options.previousExtensionToolNames ?? []) {
@@ -127,6 +130,9 @@ export async function applyWorkspace(
   const extensionOptions: LoadExtensionsOptions = {};
   if (options.mcpConfig !== undefined) {
     extensionOptions.mcpConfig = options.mcpConfig;
+  }
+  if (options.provider !== undefined) {
+    extensionOptions.provider = options.provider;
   }
   const extensions = await loadExtensions(workspace, extensionOptions);
 
@@ -206,7 +212,8 @@ export class WorkspaceManager {
     }
 
     const applyOptions: {
-      mcpConfig?: string;
+      mcpConfig?: string | undefined;
+      provider?: ProviderContract | undefined;
       previousExtensionToolNames: string[];
       previousMcpServers: McpLoadedServer[];
     } = {
@@ -215,6 +222,9 @@ export class WorkspaceManager {
     };
     if (this.options.mcpConfig !== undefined) {
       applyOptions.mcpConfig = this.options.mcpConfig;
+    }
+    if (this.options.provider !== undefined) {
+      applyOptions.provider = this.options.provider;
     }
     const prepared = await applyWorkspace(
       this.options.registry,

@@ -202,6 +202,14 @@ pnpm desktop:release
 - **工作区无缝切换**：在界面顶部轻松切换工作目录，自动重载技能、插件与符号索引，并自动记忆最近打开的目录。
 - **应用内自动更新**：依托 `electron-updater` 与 GitHub Releases，自动检测最新版本、展示 Release Notes、实时更新下载进度，支持一键“重启并安装”。
 
+> 💡 **macOS 首次安装提示**：
+> 若打开应用时系统提示 `“cy-agent.app”已损坏，无法打开。你应该将它移到废纸篓`，这是由于应用尚未配置 Apple 开发者商业证书公证（Notarization），被 macOS Gatekeeper 机制安全隔离。请在终端执行以下命令清除隔离属性即可正常打开：
+> ```bash
+> xattr -cr /Applications/cy-agent.app
+> # 若应用在 Downloads 目录，可执行：
+> # xattr -cr ~/Downloads/cy-agent.app
+> ```
+
 ---
 
 ## 🧩 扩展系统

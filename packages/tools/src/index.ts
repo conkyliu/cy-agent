@@ -44,3 +44,9 @@ export {
   type Extensions,
   type LoadExtensionsOptions,
 } from './extensions.js';
+export {
+  createDelegateTaskTool,
+  SUBAGENT_SYSTEM_PROMPT,
+  type DelegateTaskArgs,
+  type DelegateTaskToolOptions,
+} from './subagent.js';

@@ -1,13 +1,16 @@
-import type { ToolBase } from '@cy-agent/agent';
+import type { ProviderContract, ToolBase } from '@cy-agent/agent';
 import { loadMcpTools, readMcpConfig, type McpLoadedServer } from '@cy-agent/mcp';
 import { createFileDependenciesTool, createFindSymbolTool } from './navigation.js';
 import { loadPluginTools } from './plugins.js';
 import { buildSkillsOverviewSection, listSkills, type SkillInfo } from './skills.js';
+import { createDelegateTaskTool } from './subagent.js';
 import { buildSymbolIndex, type SymbolIndex } from './symbol-index.js';
 
 export interface LoadExtensionsOptions {
   /** MCP 配置文件路径（Claude Desktop 风格）；未提供则跳过 MCP。 */
-  mcpConfig?: string;
+  mcpConfig?: string | undefined;
+  /** 当前会话的 Provider 实例；提供时自动注册 delegate_task 子智能体派生工具。 */
+  provider?: ProviderContract | undefined;
 }
 
 export interface Extensions {
@@ -65,6 +68,16 @@ export async function loadExtensions(
   }
   if (symbolIndex.entries.length > 0) {
     tools.push(createFindSymbolTool(symbolIndex), createFileDependenciesTool(workspace));
+  }
+
+  if (options.provider !== undefined) {
+    tools.push(
+      createDelegateTaskTool({
+        provider: options.provider,
+        workspace,
+        customTools: [...tools],
+      }),
+    );
   }
 
   const skills = await listSkills(workspace);

@@ -107,11 +107,12 @@ async function bootstrapAsync(): Promise<void> {
   // 桌面端存档独立于工作区，放在应用 userData 下。
   const store = new JsonFileSessionStore(path.join(app.getPath('userData'), 'sessions'));
 
-  // 应用工作区：内置工具 + 扩展（MCP/插件/技能）+ systemPrompt（含概览与技能段）。
+  // 应用工作区：内置工具 + 扩展（MCP/插件/技能/Sub-agent）+ systemPrompt（含概览与技能段）。
   const mcpConfig = process.env.CY_AGENT_MCP_CONFIG;
   const hasMcpConfig = mcpConfig !== undefined && mcpConfig.length > 0;
   const prepared = await applyWorkspace(registry, workspace, BASE_SYSTEM_PROMPT, {
     ...(hasMcpConfig && mcpConfig !== undefined ? { mcpConfig } : {}),
+    provider,
   });
   for (const warning of prepared.warnings) {
     console.warn(`[extensions] ${warning}`);
@@ -130,6 +131,7 @@ async function bootstrapAsync(): Promise<void> {
     host: manager,
     baseSystemPrompt: BASE_SYSTEM_PROMPT,
     memory,
+    provider,
   };
   if (hasMcpConfig && mcpConfig !== undefined) {
     workspaceManagerOptions.mcpConfig = mcpConfig;
