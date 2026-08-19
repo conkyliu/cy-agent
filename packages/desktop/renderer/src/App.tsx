@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
-import type { IpcDesktopConfig, IpcSessionSummary } from '../../shared/ipc';
+import type { IpcDesktopConfig, IpcSessionSummary, IpcUpdaterStatus } from '../../shared/ipc';
 import { desktop } from './api';
 import { ApprovalModal } from './components/ApprovalModal';
 import { Composer } from './components/Composer';
 import { SessionSidebar } from './components/SessionSidebar';
 import { Transcript } from './components/Transcript';
+import { UpdateModal } from './components/UpdateModal';
 import {
   applyEvent,
   clearTranscript,
@@ -45,6 +46,7 @@ export function App() {
   const [config, setConfig] = useState<IpcDesktopConfig | null>(null);
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [updaterStatus, setUpdaterStatus] = useState<IpcUpdaterStatus>({ type: 'idle' });
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -59,7 +61,7 @@ export function App() {
   }, [activeId]);
 
   useEffect(() => {
-    const unsubscribe = desktop.onAgentEvent((event) => {
+    const unsubscribeEvents = desktop.onAgentEvent((event) => {
       dispatch({ type: 'agent-event', event });
       if (
         event.type === 'session_completed' ||
@@ -69,6 +71,11 @@ export function App() {
         void refreshSessions();
       }
     });
+
+    const unsubscribeUpdater = desktop.onUpdaterStatus((status) => {
+      setUpdaterStatus(status);
+    });
+
     void desktop
       .getConfig()
       .then(setConfig)
@@ -78,8 +85,29 @@ export function App() {
       .then((info) => setWorkspace(info.workspace))
       .catch((error: unknown) => setActionError(toMessage(error)));
     void refreshSessions();
-    return unsubscribe;
+
+    return () => {
+      unsubscribeEvents();
+      unsubscribeUpdater();
+    };
   }, [refreshSessions]);
+
+  const handleCheckUpdates = useCallback(() => {
+    setUpdaterStatus({ type: 'checking' });
+    desktop.checkForUpdates().catch((error: unknown) => setActionError(toMessage(error)));
+  }, []);
+
+  const handleDownloadUpdate = useCallback(() => {
+    desktop.downloadUpdate().catch((error: unknown) => setActionError(toMessage(error)));
+  }, []);
+
+  const handleInstallUpdate = useCallback(() => {
+    desktop.installUpdate().catch((error: unknown) => setActionError(toMessage(error)));
+  }, []);
+
+  const handleCloseUpdateModal = useCallback(() => {
+    setUpdaterStatus({ type: 'idle' });
+  }, []);
 
   const handleSend = useCallback((text: string) => {
     dispatch({ type: 'user-submitted', text });
@@ -165,9 +193,11 @@ export function App() {
         sessions={sessions}
         activeId={activeId}
         disabled={running}
+        version={config?.version}
         onNew={handleNewSession}
         onOpen={handleOpenSession}
         onDelete={handleDeleteSession}
+        onCheckUpdates={handleCheckUpdates}
       />
       <main className="flex min-w-0 flex-1 flex-col bg-surface">
         <header className="flex items-center justify-between border-b border-surface-border px-4 py-2">
@@ -216,6 +246,15 @@ export function App() {
 
       {state.pendingApproval !== null && (
         <ApprovalModal approval={state.pendingApproval} onResolve={handleApproval} />
+      )}
+
+      {updaterStatus.type !== 'idle' && (
+        <UpdateModal
+          status={updaterStatus}
+          onClose={handleCloseUpdateModal}
+          onDownload={handleDownloadUpdate}
+          onInstall={handleInstallUpdate}
+        />
       )}
     </div>
   );

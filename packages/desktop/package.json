@@ -28,7 +28,8 @@
     "@cy-agent/openai-provider": "workspace:*",
     "@cy-agent/protocol": "workspace:*",
     "@cy-agent/storage": "workspace:*",
-    "@cy-agent/tools": "workspace:*"
+    "@cy-agent/tools": "workspace:*",
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",

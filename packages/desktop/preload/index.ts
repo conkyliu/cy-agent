@@ -4,7 +4,12 @@
  */
 
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import { IpcChannels, type DesktopApi, type IpcAgentEvent } from '../shared/ipc';
+import {
+  IpcChannels,
+  type DesktopApi,
+  type IpcAgentEvent,
+  type IpcUpdaterStatus,
+} from '../shared/ipc';
 
 const api: DesktopApi = {
   send: (text) => ipcRenderer.invoke(IpcChannels.sessionSend, text),
@@ -18,6 +23,9 @@ const api: DesktopApi = {
   getConfig: () => ipcRenderer.invoke(IpcChannels.configGet),
   getWorkspace: () => ipcRenderer.invoke(IpcChannels.workspaceGet),
   selectWorkspace: () => ipcRenderer.invoke(IpcChannels.workspaceSelect),
+  checkForUpdates: () => ipcRenderer.invoke(IpcChannels.updaterCheck),
+  downloadUpdate: () => ipcRenderer.invoke(IpcChannels.updaterDownload),
+  installUpdate: () => ipcRenderer.invoke(IpcChannels.updaterInstall),
   onAgentEvent: (listener) => {
     const handler = (_event: IpcRendererEvent, payload: IpcAgentEvent): void => {
       listener(payload);
@@ -25,6 +33,15 @@ const api: DesktopApi = {
     ipcRenderer.on(IpcChannels.agentEvent, handler);
     return () => {
       ipcRenderer.removeListener(IpcChannels.agentEvent, handler);
+    };
+  },
+  onUpdaterStatus: (listener) => {
+    const handler = (_event: IpcRendererEvent, payload: IpcUpdaterStatus): void => {
+      listener(payload);
+    };
+    ipcRenderer.on(IpcChannels.updaterEvent, handler);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.updaterEvent, handler);
     };
   },
 };

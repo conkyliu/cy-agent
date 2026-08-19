@@ -1,6 +1,10 @@
 # electron-builder 打包配置：macOS / Windows / Linux 产物。
 appId: com.cyagent.desktop
 productName: cy-agent
+publish:
+  provider: github
+  owner: conkyliu
+  repo: cy-agent
 directories:
   output: release
 files:

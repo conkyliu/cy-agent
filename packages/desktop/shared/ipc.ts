@@ -19,6 +19,11 @@ export const IpcChannels = {
   configGet: 'config:get',
   workspaceGet: 'workspace:get',
   workspaceSelect: 'workspace:select',
+  /** 应用内更新相关通道。 */
+  updaterCheck: 'updater:check',
+  updaterDownload: 'updater:download',
+  updaterInstall: 'updater:install',
+  updaterEvent: 'updater:event',
   /** 主进程 -> 渲染进程单向事件推送通道。 */
   agentEvent: 'agent:event',
 } as const;
@@ -55,6 +60,27 @@ export function serializeAgentEvent(event: RawAgentEvent): IpcAgentEvent {
   return event;
 }
 
+/** 应用内更新状态。 */
+export type IpcUpdaterStatus =
+  | { type: 'idle' }
+  | { type: 'checking' }
+  | {
+      type: 'available';
+      version: string;
+      releaseDate?: string | undefined;
+      releaseNotes?: string | undefined;
+    }
+  | { type: 'not-available'; currentVersion: string }
+  | {
+      type: 'downloading';
+      percent: number;
+      bytesPerSecond: number;
+      transferred: number;
+      total: number;
+    }
+  | { type: 'downloaded'; version: string }
+  | { type: 'error'; message: string };
+
 /** 会话摘要（对齐 storage 的 SessionSummary，此处内联避免渲染侧引入 storage）。 */
 export interface IpcSessionSummary {
   id: string;
@@ -65,6 +91,7 @@ export interface IpcSessionSummary {
 
 /** `config:get` 载荷：仅暴露展示所需信息，绝不包含 API Key。 */
 export interface IpcDesktopConfig {
+  version: string;
   model: string;
   workspace: string;
   /** API Key 是否已配置；缺失时 UI 展示配置引导。 */
@@ -98,6 +125,14 @@ export interface DesktopApi {
   getWorkspace(): Promise<IpcWorkspaceInfo>;
   /** 打开系统目录选择对话框切换工作区；用户取消返回 null。 */
   selectWorkspace(): Promise<IpcWorkspaceSelectResult>;
+  /** 检查版本更新。 */
+  checkForUpdates(): Promise<void>;
+  /** 开始下载更新。 */
+  downloadUpdate(): Promise<void>;
+  /** 退出应用并安装更新。 */
+  installUpdate(): Promise<void>;
   /** 订阅 AgentEvent 流，返回退订函数。 */
   onAgentEvent(listener: (event: IpcAgentEvent) => void): () => void;
+  /** 订阅更新状态事件，返回退订函数。 */
+  onUpdaterStatus(listener: (status: IpcUpdaterStatus) => void): () => void;
 }

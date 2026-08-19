@@ -13,6 +13,7 @@ import { JsonFileSessionStore } from '@cy-agent/storage';
 import { loadDesktopConfig } from './config';
 import { registerIpcHandlers } from './ipc-handlers';
 import { SessionManager } from './session-manager';
+import { AppUpdater } from './updater';
 import { WorkspaceMemory } from './workspace-memory';
 import {
   applyWorkspace,
@@ -138,7 +139,15 @@ async function bootstrapAsync(): Promise<void> {
     mcpServers: prepared.mcpServers,
   });
 
-  registerIpcHandlers(manager, workspaceManager, config, () => mainWindow?.webContents ?? null);
+  const updater = new AppUpdater();
+
+  registerIpcHandlers(
+    manager,
+    workspaceManager,
+    config,
+    updater,
+    () => mainWindow?.webContents ?? null,
+  );
 
   // 拒绝所有权限请求（桌面壳层不需要摄像头/定位等）。
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => {

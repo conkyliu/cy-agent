@@ -5,9 +5,11 @@ export interface SessionSidebarProps {
   activeId: string | null;
   /** 会话运行中禁用切换类操作。 */
   disabled: boolean;
+  version?: string | undefined;
   onNew: () => void;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
+  onCheckUpdates?: (() => void) | undefined;
 }
 
 /** 会话侧边栏：语义对齐 CLI 的 /new、/open、/delete。 */
@@ -15,9 +17,11 @@ export function SessionSidebar({
   sessions,
   activeId,
   disabled,
+  version,
   onNew,
   onOpen,
   onDelete,
+  onCheckUpdates,
 }: SessionSidebarProps) {
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-surface-border bg-surface-soft">
@@ -73,6 +77,18 @@ export function SessionSidebar({
           );
         })}
       </nav>
+      <div className="flex items-center justify-between border-t border-surface-border px-3 py-2 text-[11px] text-faint">
+        <span>v{version ?? '0.0.0'}</span>
+        {onCheckUpdates && (
+          <button
+            type="button"
+            onClick={onCheckUpdates}
+            className="rounded-(--radius-control) px-2 py-0.5 text-secondary hover:bg-surface-muted hover:text-primary transition-colors"
+          >
+            检查更新
+          </button>
+        )}
+      </div>
     </aside>
   );
 }
