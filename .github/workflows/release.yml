@@ -26,10 +26,8 @@ jobs:
           - os: ubuntu-latest
             target: --linux
             stage-glob: 'packages/desktop/release/*.AppImage packages/desktop/release/*.deb'
-   
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
     steps:
       - name: Checkout
         uses: actions/checkout@v5
