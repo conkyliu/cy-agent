@@ -19,13 +19,13 @@ jobs:
         include:
           - os: macos-latest
             target: --mac
-            stage-glob: 'packages/desktop/release/*.dmg'
+            stage-glob: 'packages/desktop/release/*.dmg packages/desktop/release/*.zip packages/desktop/release/*.blockmap packages/desktop/release/latest-mac.yml'
           - os: windows-latest
             target: --win
-            stage-glob: 'packages/desktop/release/*.exe'
+            stage-glob: 'packages/desktop/release/*.exe packages/desktop/release/*.blockmap packages/desktop/release/latest.yml'
           - os: ubuntu-latest
             target: --linux
-            stage-glob: 'packages/desktop/release/*.AppImage packages/desktop/release/*.deb'
+            stage-glob: 'packages/desktop/release/*.AppImage packages/desktop/release/*.deb packages/desktop/release/latest-linux*.yml'
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -67,7 +67,14 @@ jobs:
         shell: bash
         run: |
           mkdir staged
-          cp ${{ matrix.stage-glob }} staged/
+          shopt -s nullglob
+          for pattern in ${{ matrix.stage-glob }}; do
+            for file in $pattern; do
+              if [ -f "$file" ]; then
+                cp -v "$file" staged/
+              fi
+            done
+          done
 
       - name: Upload release assets
         uses: actions/upload-artifact@v4

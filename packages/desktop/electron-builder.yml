@@ -13,6 +13,7 @@ files:
 mac:
   target:
     - dmg
+    - zip
   category: public.app-category.developer-tools
   # 未配置签名证书时跳过自动签名。
   identity: null
