@@ -152,11 +152,19 @@ export function UpdateModal({ status, onClose, onDownload, onInstall }: UpdateMo
 
         {status.type === 'error' && (
           <div>
-            <h3 className="text-sm font-semibold text-danger">更新检查失败</h3>
+            <h3 className="text-sm font-semibold text-danger">更新失败</h3>
             <p className="mt-2 max-h-28 overflow-y-auto rounded-(--radius-control) bg-danger-soft p-2.5 text-xs text-danger leading-relaxed">
               {status.message}
             </p>
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex items-center justify-between">
+              <a
+                href="https://github.com/conkyliu/cy-agent/releases"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-accent hover:underline"
+              >
+                前往 GitHub 手动下载 ↗
+              </a>
               <button
                 type="button"
                 onClick={onClose}
