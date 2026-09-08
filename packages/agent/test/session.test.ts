@@ -537,4 +537,62 @@ describe('AgentSession HITL 授权', () => {
     // 内部历史保持完整（压缩未生效）。
     expect(agent.getMessages()).toHaveLength(4);
   });
+
+  it('yields tool_output_chunk events when tool emits streaming output', async () => {
+    const streamingTool: ToolContract<{ text: string }, string> = {
+      name: 'streamer',
+      description: 'Emits chunks',
+      parameters: { type: 'object' },
+      execute: async (_args, _signal, onOutput) => {
+        onOutput?.('chunk 1\n');
+        onOutput?.('chunk 2\n');
+        return 'final result';
+      },
+    };
+
+    const provider = new MockProvider([
+      toolCallChunks('call_stream', 'streamer', { text: 'hello' }),
+      textChunks('All finished.'),
+    ]);
+    const registry = new ToolRegistry();
+    registry.register(streamingTool);
+    const agent = new AgentSession({ provider, registry });
+
+    const events = await drain(agent.run('run streamer'));
+
+    const outputChunks = events
+      .filter((e) => e.type === 'tool_output_chunk')
+      .map((e) => (e as { chunk: string }).chunk);
+
+    expect(outputChunks).toEqual(['chunk 1\n', 'chunk 2\n']);
+
+    const completed = events.find((e) => e.type === 'tool_execution_completed');
+    expect(completed).toMatchObject({ result: 'final result' });
+  });
+
+  it('supports dynamic requiresApproval function to bypass HITL for safe arguments', async () => {
+    const conditionalTool: ToolContract<{ op: string }, string> = {
+      name: 'cond',
+      description: 'Conditional approval',
+      parameters: { type: 'object' },
+      requiresApproval: (args) => args.op !== 'safe',
+      execute: async (args) => `executed: ${args.op}`,
+    };
+
+    const provider = new MockProvider([
+      toolCallChunks('call_safe', 'cond', { op: 'safe' }),
+      textChunks('Done safe.'),
+    ]);
+    const registry = new ToolRegistry();
+    registry.register(conditionalTool);
+    const agent = new AgentSession({ provider, registry });
+
+    const events = await drain(agent.run('run safe'));
+    // 不应触发 tool_approval_requested
+    expect(events.some((e) => e.type === 'tool_approval_requested')).toBe(false);
+    expect(events.some((e) => e.type === 'tool_execution_started')).toBe(true);
+    expect(events.find((e) => e.type === 'tool_execution_completed')).toMatchObject({
+      result: 'executed: safe',
+    });
+  });
 });

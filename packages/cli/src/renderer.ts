@@ -92,6 +92,8 @@ export function renderEvent(event: AgentEvent, options: RenderOptions = {}): str
     }
     case 'tool_execution_started':
       return paint(`\n⚙ ${event.name} ${preview(event.args)}\n`, ANSI.cyan, color);
+    case 'tool_output_chunk':
+      return paint(event.chunk, ANSI.dim, color);
     case 'tool_execution_completed':
       return paint(`✓ ${preview(event.result)}\n`, ANSI.green, color);
     case 'tool_execution_failed':

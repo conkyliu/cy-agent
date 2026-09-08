@@ -12,15 +12,17 @@ export interface ToolBase {
   description: string;
   /** JSON Schema */
   parameters: Record<string, unknown>;
-  /** 是否需要用户显式授权（如：写入文件、执行 Shell） */
-  requiresApproval?: boolean;
+  /** 是否需要用户显式授权（如：写入文件、执行 Shell）。支持布尔值或动态判定函数 */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  requiresApproval?: boolean | ((args: any) => boolean);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- 有意设计：any 保证泛型工具的双向可赋值性
-  execute(args: any, signal?: AbortSignal): Promise<any>;
+  execute(args: any, signal?: AbortSignal, onOutput?: (chunk: string) => void): Promise<any>;
 }
 
 /**
  * 泛型工具契约：工具实现者使用，保留参数与结果的强类型。
  */
 export interface ToolContract<TArgs = unknown, TResult = unknown> extends ToolBase {
-  execute(args: TArgs, signal?: AbortSignal): Promise<TResult>;
+  requiresApproval?: boolean | ((args: TArgs) => boolean);
+  execute(args: TArgs, signal?: AbortSignal, onOutput?: (chunk: string) => void): Promise<TResult>;
 }

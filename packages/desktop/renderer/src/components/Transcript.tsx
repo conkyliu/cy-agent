@@ -73,13 +73,30 @@ const STATUS_CLASS: Record<ToolItem['status'], string> = {
 /** 工具执行状态卡片：started → completed/failed 的状态迁移可视化。 */
 function ToolCard({ item }: { item: ToolItem }) {
   const detail = item.error ?? item.result ?? '';
+  const isRunning = item.status === 'running';
+  const hasStreaming =
+    isRunning && Boolean(item.streamingOutput && item.streamingOutput.length > 0);
+
   return (
     <div className="rounded-(--radius-card) border border-surface-border bg-surface-soft px-3 py-2">
       <div className="flex items-center gap-2 text-xs">
         <span className="font-mono font-semibold text-primary">{item.name}</span>
         <span className={STATUS_CLASS[item.status]}>{STATUS_LABEL[item.status]}</span>
+        {isRunning && (
+          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+        )}
       </div>
-      <details className="mt-1">
+
+      {hasStreaming && (
+        <div className="mt-2">
+          <div className="mb-1 text-[10px] font-mono text-faint">控制台输出 (实时):</div>
+          <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-(--radius-control) bg-surface-muted p-2 font-mono text-[11px] text-secondary">
+            {item.streamingOutput}
+          </pre>
+        </div>
+      )}
+
+      <details className="mt-1" open={!hasStreaming}>
         <summary className="cursor-pointer text-[11px] text-faint select-none">参数 / 结果</summary>
         {item.argsText.length > 0 && (
           <pre className="mt-1 max-h-40 overflow-y-auto rounded-(--radius-control) bg-surface-muted p-2 font-mono text-[11px] text-secondary">

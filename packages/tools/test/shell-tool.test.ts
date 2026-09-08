@@ -17,16 +17,26 @@ describe('run_shell 工具', () => {
     cwd = await fs.mkdtemp(path.join(os.tmpdir(), 'cy-shell-'));
   }
 
-  it('标记为需授权，且成功命令返回 stdout', async () => {
+  it('对危险命令要求授权，对安全命令自动放行，支持流式输出', async () => {
     await setup();
     const tool = createRunShellTool(cwd);
-    expect(tool.requiresApproval).toBe(true);
+    expect(typeof tool.requiresApproval).toBe('function');
+    if (typeof tool.requiresApproval === 'function') {
+      expect(tool.requiresApproval({ command: 'rm -rf foo' })).toBe(true);
+      expect(tool.requiresApproval({ command: 'git status' })).toBe(false);
+      expect(tool.requiresApproval({ command: 'echo hello' })).toBe(false);
+      expect(tool.requiresApproval({ command: 'echo hello > out.txt' })).toBe(true);
+    }
     expect(tool.name).toBe('run_shell');
 
-    const result = await tool.execute({ command: 'echo hello-shell' });
+    const streamedChunks: string[] = [];
+    const result = await tool.execute({ command: 'echo hello-shell' }, undefined, (chunk) => {
+      streamedChunks.push(chunk);
+    });
     expect(result).toContain('[stdout]');
     expect(result).toContain('hello-shell');
     expect(result).not.toContain('exit code');
+    expect(streamedChunks.join('')).toContain('hello-shell');
   });
 
   it('非零退出码格式化为结果而非抛异常（交还 LLM 自我修正）', async () => {

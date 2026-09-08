@@ -42,6 +42,7 @@ export type IpcAgentEvent =
   | { type: 'context_compacted'; removedMessages: number }
   | { type: 'tool_approval_requested'; toolCallId: string; name: string; args: unknown }
   | { type: 'tool_execution_started'; toolCallId: string; name: string; args: unknown }
+  | { type: 'tool_output_chunk'; toolCallId: string; chunk: string }
   | { type: 'tool_execution_completed'; toolCallId: string; result: unknown }
   | { type: 'tool_execution_failed'; toolCallId: string; error: string }
   | { type: 'session_completed'; finalMessages: Message[] }

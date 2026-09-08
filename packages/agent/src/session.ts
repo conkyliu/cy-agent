@@ -335,7 +335,12 @@ export class AgentSession {
       }
 
       // Human-in-the-loop：需授权的工具挂起等待宿主响应。
-      if (tool.requiresApproval === true) {
+      const needsApproval =
+        typeof tool.requiresApproval === 'function'
+          ? tool.requiresApproval(args)
+          : tool.requiresApproval === true;
+
+      if (needsApproval) {
         // 先创建 Deferred 再向外 yield 事件，保证宿主的同步响应不会丢失。
         const approval = this.createApproval(toolCall.id, signal);
         yield {
@@ -360,7 +365,35 @@ export class AgentSession {
 
       yield { type: 'tool_execution_started', toolCallId: toolCall.id, name: toolCall.name, args };
 
-      const result = await tool.execute(args, signal);
+      // 实时流式输出通道：工具调用 onOutput 时向外派发 tool_output_chunk。
+      const queue: string[] = [];
+      let notifyChunk: (() => void) | null = null;
+      const onOutput = (chunk: string): void => {
+        queue.push(chunk);
+        notifyChunk?.();
+      };
+
+      let done = false;
+      const executionPromise = tool.execute(args, signal, onOutput).finally(() => {
+        done = true;
+        notifyChunk?.();
+      });
+
+      while (!done || queue.length > 0) {
+        if (queue.length === 0) {
+          await new Promise<void>((resolve) => {
+            notifyChunk = resolve;
+          });
+        }
+        while (queue.length > 0) {
+          const chunk = queue.shift();
+          if (chunk !== undefined) {
+            yield { type: 'tool_output_chunk', toolCallId: toolCall.id, chunk };
+          }
+        }
+      }
+
+      const result = await executionPromise;
       // 统一截断层：事件流与历史消息使用同一截断结果，防止大输出污染上下文。
       const raw = typeof result === 'string' ? result : JSON.stringify(result);
       const output = truncateToolOutput(raw, this.maxToolOutputChars);

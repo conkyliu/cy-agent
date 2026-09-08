@@ -129,6 +129,9 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
           });
           progress(event);
           break;
+        case 'tool_output_chunk':
+          progress(event);
+          break;
         case 'tool_execution_completed':
           if (typeof event.result === 'string' && event.result.includes(DENIED_MARKER)) {
             finishTool(event.toolCallId, 'denied');

@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { ToolContract } from '@cy-agent/agent';
+import { isSafeCommand } from './safe-commands.js';
 import { resolveInWorkspaceSafe } from './workspace.js';
 
 export interface RunShellArgs {
@@ -17,7 +18,7 @@ const MAX_TIMEOUT_MS = 120_000;
 const MAX_OUTPUT_BYTES = 100_000;
 
 /**
- * Shell 执行工具：高危操作，requiresApproval 强制开启。
+ * Shell 执行工具：高危操作需授权，只读安全命令自动放行。
  *
  * 安全边界：
  * - cwd 必须位于工作区沙箱内（resolveInWorkspaceSafe 防 `..` 与符号链接逃逸）。
@@ -31,8 +32,8 @@ export function createRunShellTool(workspaceRoot: string): ToolContract<RunShell
     name: 'run_shell',
     description:
       'Run a shell command inside the workspace and capture its output. ' +
-      'Requires user approval. Use for builds, tests, git and other CLI operations.',
-    requiresApproval: true,
+      'Safe read-only commands (git status, ls, pwd, cat, etc.) are auto-approved; mutating commands require user approval.',
+    requiresApproval: (args: RunShellArgs) => !isSafeCommand(args.command),
     parameters: {
       type: 'object',
       properties: {
@@ -50,10 +51,14 @@ export function createRunShellTool(workspaceRoot: string): ToolContract<RunShell
       },
       required: ['command'],
     },
-    execute: async (args, signal) => {
+    execute: async (
+      args: RunShellArgs,
+      signal?: AbortSignal,
+      onOutput?: (chunk: string) => void,
+    ) => {
       const cwd = await resolveInWorkspaceSafe(workspaceRoot, args.cwd ?? '.');
       const timeoutMs = Math.min(args.timeoutMs ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
-      return runCommand(args.command, cwd, timeoutMs, signal);
+      return runCommand(args.command, cwd, timeoutMs, signal, onOutput);
     },
   };
 }
@@ -70,6 +75,7 @@ function runCommand(
   cwd: string,
   timeoutMs: number,
   signal?: AbortSignal,
+  onOutput?: (chunk: string) => void,
 ): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     if (signal?.aborted) {
@@ -94,12 +100,14 @@ function runCommand(
     let settled = false;
 
     const append = (stream: 'stdout' | 'stderr', chunk: Buffer): void => {
+      const text = chunk.toString('utf8');
+      onOutput?.(text);
       const key = stream;
       const truncationKey = stream === 'stdout' ? 'stdoutTruncated' : 'stderrTruncated';
       if (captured[truncationKey]) {
         return;
       }
-      const next = captured[key] + chunk.toString('utf8');
+      const next = captured[key] + text;
       if (next.length > MAX_OUTPUT_BYTES) {
         captured[key] = next.slice(0, MAX_OUTPUT_BYTES);
         captured[truncationKey] = true;

@@ -26,6 +26,7 @@ export interface ToolItem {
   status: 'pending' | 'running' | 'completed' | 'failed';
   result?: string;
   error?: string;
+  streamingOutput?: string;
 }
 
 export type TranscriptItem = UserItem | AssistantItem | ToolItem;
@@ -94,6 +95,8 @@ export function applyEvent(state: UiState, event: IpcAgentEvent): UiState {
       };
     case 'tool_execution_started':
       return upsertTool(state, event.toolCallId, event.name, event.args, { status: 'running' });
+    case 'tool_output_chunk':
+      return appendToolOutput(state, event.toolCallId, event.chunk);
     case 'tool_execution_completed':
       return updateTool(state, event.toolCallId, {
         status: 'completed',
@@ -214,6 +217,22 @@ function updateTool(state: UiState, toolCallId: string, patch: Partial<ToolItem>
     return state;
   }
   return patchToolAt(state, index, patch);
+}
+
+/** tool_output_chunk：向正在运行的工具卡片追加流式控制台输出。 */
+function appendToolOutput(state: UiState, toolCallId: string, chunk: string): UiState {
+  const index = state.items.findIndex(
+    (item): item is ToolItem => item.kind === 'tool' && item.toolCallId === toolCallId,
+  );
+  if (index === -1) {
+    return state;
+  }
+  const current = state.items[index];
+  if (current === undefined || current.kind !== 'tool') {
+    return state;
+  }
+  const streamingOutput = (current.streamingOutput ?? '') + chunk;
+  return patchToolAt(state, index, { streamingOutput });
 }
 
 function patchToolAt(state: UiState, index: number, patch: Partial<ToolItem>): UiState {
