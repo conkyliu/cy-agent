@@ -79,7 +79,9 @@ export function renderEvent(event: AgentEvent, options: RenderOptions = {}): str
       ) {
         const filePath = String((event.args as { path: unknown }).path);
         const target = String((event.args as { targetContent: unknown }).targetContent);
-        const replacement = String((event.args as { replacementContent: unknown }).replacementContent);
+        const replacement = String(
+          (event.args as { replacementContent: unknown }).replacementContent,
+        );
         return formatEditApproval(filePath, target, replacement, color);
       }
       return paint(

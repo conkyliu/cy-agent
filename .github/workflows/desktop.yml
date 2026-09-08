@@ -10,7 +10,7 @@ jobs:
     name: Desktop / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     permissions:
-      contents: write  # Add this to allow creating releases
+      contents: write # Add this to allow creating releases
 
     strategy:
       fail-fast: false

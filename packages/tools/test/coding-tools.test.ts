@@ -62,7 +62,10 @@ describe('coding tools', () => {
     const edit = tool('edit_file');
     expect(edit.requiresApproval).toBe(true);
 
-    await writeFile(path.join(cwd, 'sample.ts'), 'function add(a: number, b: number) {\n  return a - b;\n}\n');
+    await writeFile(
+      path.join(cwd, 'sample.ts'),
+      'function add(a: number, b: number) {\n  return a - b;\n}\n',
+    );
 
     // 正常精准替换
     const result = await edit.execute({
@@ -82,7 +85,11 @@ describe('coding tools', () => {
 
     // 目标内容不存在
     await expect(
-      edit.execute({ path: 'sample.ts', targetContent: 'missing code', replacementContent: 'new code' }),
+      edit.execute({
+        path: 'sample.ts',
+        targetContent: 'missing code',
+        replacementContent: 'new code',
+      }),
     ).rejects.toThrow(/Target content not found/);
 
     // 目标内容为空

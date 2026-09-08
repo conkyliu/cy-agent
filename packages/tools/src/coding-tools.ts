@@ -152,6 +152,7 @@ export function createEditFileTool(cwd: string): ToolContract<EditFileArgs, stri
         ) {
           throw new Error(
             `File "${args.path}" does not exist. Use "write_file" to create new files.`,
+            { cause: error },
           );
         }
         throw error;

@@ -7,4 +7,4 @@
 - [x] Add unit tests for `diff.ts` and `edit_file` in `packages/tools/test/` <!-- id: 4 -->
 - [x] Update system prompt and add colorized diff preview in CLI `packages/cli/src/renderer.ts` and `main.ts` <!-- id: 5 -->
 - [x] Update system prompt in Desktop `main/index.ts` and render visual diff card in `ApprovalModal.tsx` <!-- id: 6 -->
-- [ ] Run full monorepo validation (test, typecheck, lint, format) <!-- id: 7 -->
+- [x] Run full monorepo validation (test, typecheck, lint, format) <!-- id: 7 -->
