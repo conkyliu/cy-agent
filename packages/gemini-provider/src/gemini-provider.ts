@@ -88,9 +88,8 @@ export class GeminiProvider implements ProviderContract {
       requestInit.signal = options.signal;
     }
 
-    const modelName = this.options.model.startsWith('models/')
-      ? this.options.model
-      : `models/${this.options.model}`;
+    const rawModel = this.options.model.replace(/^google\//, '');
+    const modelName = rawModel.startsWith('models/') ? rawModel : `models/${rawModel}`;
     const targetUrl = `${baseUrl}/${modelName}:streamGenerateContent?alt=sse`;
 
     const response = await fetchImpl(targetUrl, requestInit);

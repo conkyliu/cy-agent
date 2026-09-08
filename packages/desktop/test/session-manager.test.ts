@@ -239,4 +239,15 @@ describe('SessionManager', () => {
     ).toBe(true);
     expect(events.some((event) => event.type === 'session_completed')).toBe(true);
   });
+
+  it('updateProvider 能够热替换 Provider 并在下轮生效', async () => {
+    const { manager, events } = createManager(textProvider('first-answer'));
+    await manager.send('hello');
+    expect(events.some((e) => e.type === 'text_chunk' && e.text === 'first-answer')).toBe(true);
+
+    // 热重载为新 Provider
+    manager.updateProvider(textProvider('second-answer'), true);
+    await manager.send('hello again');
+    expect(events.some((e) => e.type === 'text_chunk' && e.text === 'second-answer')).toBe(true);
+  });
 });

@@ -15,6 +15,7 @@ export interface DesktopRuntimeConfig {
   baseUrl?: string;
   /** 编码工具沙箱根目录。 */
   workspace: string;
+  customSystemPrompt?: string;
 }
 
 /** 配置加载需要关注的变量（缺失时尝试从 shell 配置文件补充）。 */
@@ -99,16 +100,24 @@ export function readShellConfigExports(
 }
 
 /**
- * 从环境变量装载配置。
+ * 从环境变量与持久化设置装载配置。持久化设置优于环境变量回退。
  * @param defaultWorkspace CY_AGENT_CWD 未设置时的回退目录（通常为 Documents）。
+ * @param stored 本地持久化保存的设置项。
  */
 export function loadDesktopConfig(
   env: Record<string, string | undefined>,
   defaultWorkspace: string,
+  stored?: {
+    provider?: string;
+    model?: string;
+    apiKey?: string;
+    baseUrl?: string;
+    customSystemPrompt?: string;
+  },
 ): DesktopRuntimeConfig {
   const resolved = resolveConfigEnv(env);
-  const rawProvider = pick(resolved.CY_AGENT_PROVIDER)?.toLowerCase();
-  const rawModel = pick(resolved.CY_AGENT_MODEL);
+  const rawProvider = pick(stored?.provider, resolved.CY_AGENT_PROVIDER)?.toLowerCase();
+  const rawModel = pick(stored?.model, resolved.CY_AGENT_MODEL);
 
   let provider: 'openai' | 'anthropic' | 'gemini' | string;
   if (rawProvider) {
@@ -117,6 +126,12 @@ export function loadDesktopConfig(
     provider = 'anthropic';
   } else if (rawModel?.startsWith('gemini')) {
     provider = 'gemini';
+  } else if (rawModel?.includes('antigravity') || rawModel?.startsWith('google/')) {
+    if (resolved.OPENAI_API_KEY && !resolved.GEMINI_API_KEY) {
+      provider = 'openai';
+    } else {
+      provider = 'gemini';
+    }
   } else if (resolved.ANTHROPIC_API_KEY && !resolved.OPENAI_API_KEY && !resolved.CY_AGENT_API_KEY) {
     provider = 'anthropic';
   } else if (resolved.GEMINI_API_KEY && !resolved.OPENAI_API_KEY && !resolved.CY_AGENT_API_KEY) {
@@ -125,18 +140,20 @@ export function loadDesktopConfig(
     provider = 'openai';
   }
 
-  let apiKey: string | undefined;
-  if (provider === 'anthropic') {
-    apiKey = pick(resolved.CY_AGENT_API_KEY, resolved.ANTHROPIC_API_KEY, resolved.OPENAI_API_KEY);
-  } else if (provider === 'gemini') {
-    apiKey = pick(resolved.CY_AGENT_API_KEY, resolved.GEMINI_API_KEY, resolved.OPENAI_API_KEY);
-  } else {
-    apiKey = pick(
-      resolved.CY_AGENT_API_KEY,
-      resolved.OPENAI_API_KEY,
-      resolved.ANTHROPIC_API_KEY,
-      resolved.GEMINI_API_KEY,
-    );
+  let apiKey: string | undefined = pick(stored?.apiKey);
+  if (apiKey === undefined) {
+    if (provider === 'anthropic') {
+      apiKey = pick(resolved.CY_AGENT_API_KEY, resolved.ANTHROPIC_API_KEY, resolved.OPENAI_API_KEY);
+    } else if (provider === 'gemini') {
+      apiKey = pick(resolved.CY_AGENT_API_KEY, resolved.GEMINI_API_KEY, resolved.OPENAI_API_KEY);
+    } else {
+      apiKey = pick(
+        resolved.CY_AGENT_API_KEY,
+        resolved.OPENAI_API_KEY,
+        resolved.ANTHROPIC_API_KEY,
+        resolved.GEMINI_API_KEY,
+      );
+    }
   }
 
   const model =
@@ -147,7 +164,7 @@ export function loadDesktopConfig(
         ? 'gemini-2.0-flash'
         : 'gpt-4o');
   const workspace = pick(resolved.CY_AGENT_CWD) ?? defaultWorkspace;
-  const baseUrl = pick(resolved.CY_AGENT_BASE_URL);
+  const baseUrl = pick(stored?.baseUrl, resolved.CY_AGENT_BASE_URL);
 
   const config: DesktopRuntimeConfig = { provider, model, workspace };
   if (apiKey !== undefined) {
@@ -155,6 +172,9 @@ export function loadDesktopConfig(
   }
   if (baseUrl !== undefined) {
     config.baseUrl = baseUrl;
+  }
+  if (stored?.customSystemPrompt !== undefined && stored.customSystemPrompt.length > 0) {
+    config.customSystemPrompt = stored.customSystemPrompt;
   }
   return config;
 }

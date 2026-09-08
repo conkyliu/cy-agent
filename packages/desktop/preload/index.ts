@@ -21,8 +21,22 @@ const api: DesktopApi = {
   openSession: (id) => ipcRenderer.invoke(IpcChannels.sessionsOpen, id),
   deleteSession: (id) => ipcRenderer.invoke(IpcChannels.sessionsDelete, id),
   getConfig: () => ipcRenderer.invoke(IpcChannels.configGet),
+  updateConfig: (payload) => ipcRenderer.invoke(IpcChannels.configUpdate, payload),
   getWorkspace: () => ipcRenderer.invoke(IpcChannels.workspaceGet),
   selectWorkspace: () => ipcRenderer.invoke(IpcChannels.workspaceSelect),
+  terminalInit: (workspace) => ipcRenderer.invoke(IpcChannels.terminalInit, workspace),
+  terminalWrite: (data) => ipcRenderer.invoke(IpcChannels.terminalWrite, data),
+  terminalResize: (cols, rows) => ipcRenderer.invoke(IpcChannels.terminalResize, cols, rows),
+  terminalKill: () => ipcRenderer.invoke(IpcChannels.terminalKill),
+  onTerminalData: (listener) => {
+    const handler = (_event: IpcRendererEvent, data: string): void => {
+      listener(data);
+    };
+    ipcRenderer.on(IpcChannels.terminalData, handler);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.terminalData, handler);
+    };
+  },
   checkForUpdates: () => ipcRenderer.invoke(IpcChannels.updaterCheck),
   downloadUpdate: () => ipcRenderer.invoke(IpcChannels.updaterDownload),
   installUpdate: () => ipcRenderer.invoke(IpcChannels.updaterInstall),

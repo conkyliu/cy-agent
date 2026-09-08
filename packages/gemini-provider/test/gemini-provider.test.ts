@@ -176,4 +176,21 @@ describe('GeminiProvider', () => {
       /400.*API key invalid/,
     );
   });
+
+  it('strips google/ prefix and formats models/ correctly for google/antigravity', async () => {
+    const { fetchImpl, captured } = mockGeminiFetch([
+      { candidates: [{ content: { parts: [{ text: 'response' }] } }] },
+    ]);
+    const provider = new GeminiProvider({
+      apiKey: 'test-key',
+      model: 'google/antigravity',
+      fetchImpl,
+    });
+
+    await collect(provider.generateStream({ messages: [userMessage] }));
+
+    expect(captured().url).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/models/antigravity:streamGenerateContent?alt=sse',
+    );
+  });
 });

@@ -137,6 +137,12 @@ export function loadConfig(
     provider = 'anthropic';
   } else if (rawModel?.startsWith('gemini')) {
     provider = 'gemini';
+  } else if (rawModel?.includes('antigravity') || rawModel?.startsWith('google/')) {
+    if (env.OPENAI_API_KEY && !env.GEMINI_API_KEY) {
+      provider = 'openai';
+    } else {
+      provider = 'gemini';
+    }
   } else if (env.ANTHROPIC_API_KEY && !env.OPENAI_API_KEY && !env.CY_AGENT_API_KEY) {
     provider = 'anthropic';
   } else if (env.GEMINI_API_KEY && !env.OPENAI_API_KEY && !env.CY_AGENT_API_KEY) {

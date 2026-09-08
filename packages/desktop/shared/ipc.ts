@@ -17,8 +17,15 @@ export const IpcChannels = {
   sessionsOpen: 'sessions:open',
   sessionsDelete: 'sessions:delete',
   configGet: 'config:get',
+  configUpdate: 'config:update',
   workspaceGet: 'workspace:get',
   workspaceSelect: 'workspace:select',
+  /** 内嵌终端交互通道。 */
+  terminalInit: 'terminal:init',
+  terminalWrite: 'terminal:write',
+  terminalResize: 'terminal:resize',
+  terminalKill: 'terminal:kill',
+  terminalData: 'terminal:data',
   /** 应用内更新相关通道。 */
   updaterCheck: 'updater:check',
   updaterDownload: 'updater:download',
@@ -90,13 +97,26 @@ export interface IpcSessionSummary {
   title?: string;
 }
 
-/** `config:get` 载荷：仅暴露展示所需信息，绝不包含 API Key。 */
+/** `config:get` 载荷：仅暴露展示所需信息，不泄露原始 API Key。 */
 export interface IpcDesktopConfig {
   version: string;
   model: string;
+  provider: 'openai' | 'anthropic' | 'gemini' | string;
   workspace: string;
   /** API Key 是否已配置；缺失时 UI 展示配置引导。 */
   configured: boolean;
+  baseUrl?: string;
+  apiKeyMasked?: string;
+  customSystemPrompt?: string;
+}
+
+/** `config:update` 请求载荷。 */
+export interface IpcUpdateConfigPayload {
+  provider?: 'openai' | 'anthropic' | 'gemini' | string;
+  model?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  customSystemPrompt?: string;
 }
 
 /** `workspace:get` 载荷：当前工作区路径。 */
@@ -122,10 +142,22 @@ export interface DesktopApi {
   openSession(id: string): Promise<{ id: string; messages: Message[] }>;
   deleteSession(id: string): Promise<void>;
   getConfig(): Promise<IpcDesktopConfig>;
+  /** 更新用户设置并热重载 Provider 与提示词。 */
+  updateConfig(payload: IpcUpdateConfigPayload): Promise<IpcDesktopConfig>;
   /** 查询当前工作区路径。 */
   getWorkspace(): Promise<IpcWorkspaceInfo>;
   /** 打开系统目录选择对话框切换工作区；用户取消返回 null。 */
   selectWorkspace(): Promise<IpcWorkspaceSelectResult>;
+  /** 初始化/重置内嵌终端 Shell。 */
+  terminalInit(workspace?: string): Promise<void>;
+  /** 向内嵌终端写入输入字符。 */
+  terminalWrite(data: string): Promise<void>;
+  /** 通知内嵌终端尺寸变化。 */
+  terminalResize(cols: number, rows: number): Promise<void>;
+  /** 终止内嵌终端。 */
+  terminalKill(): Promise<void>;
+  /** 订阅内嵌终端标准输出/错误流。 */
+  onTerminalData(listener: (data: string) => void): () => void;
   /** 检查版本更新。 */
   checkForUpdates(): Promise<void>;
   /** 开始下载更新。 */

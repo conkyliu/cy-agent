@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useReducer, useState } from 'react';
-import type { IpcDesktopConfig, IpcSessionSummary, IpcUpdaterStatus } from '../../shared/ipc';
+import type {
+  IpcDesktopConfig,
+  IpcSessionSummary,
+  IpcUpdaterStatus,
+  IpcUpdateConfigPayload,
+} from '../../shared/ipc';
 import { desktop } from './api';
 import { ApprovalModal } from './components/ApprovalModal';
 import { Composer } from './components/Composer';
 import { SessionSidebar } from './components/SessionSidebar';
+import { SettingsModal } from './components/SettingsModal';
+import { TerminalDrawer } from './components/TerminalDrawer';
 import { Transcript } from './components/Transcript';
 import { UpdateModal } from './components/UpdateModal';
 import {
@@ -47,6 +54,8 @@ export function App() {
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [updaterStatus, setUpdaterStatus] = useState<IpcUpdaterStatus>({ type: 'idle' });
+  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+  const [terminalOpen, setTerminalOpen] = useState<boolean>(false);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -59,6 +68,16 @@ export function App() {
       setActionError(toMessage(error));
     }
   }, [activeId]);
+
+  const handleSaveConfig = useCallback(async (payload: IpcUpdateConfigPayload) => {
+    try {
+      const updated = await desktop.updateConfig(payload);
+      setConfig(updated);
+    } catch (error) {
+      setActionError(toMessage(error));
+      throw error;
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribeEvents = desktop.onAgentEvent((event) => {
@@ -198,6 +217,9 @@ export function App() {
         onOpen={handleOpenSession}
         onDelete={handleDeleteSession}
         onCheckUpdates={handleCheckUpdates}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onToggleTerminal={() => setTerminalOpen((prev) => !prev)}
+        terminalOpen={terminalOpen}
       />
       <main className="flex min-w-0 flex-1 flex-col bg-surface">
         <header className="flex items-center justify-between border-b border-surface-border px-4 py-2">
@@ -208,7 +230,17 @@ export function App() {
                 tokens ↑{state.usage.inputTokens} ↓{state.usage.outputTokens}
               </span>
             )}
-            {config !== null && <span>{config.model}</span>}
+            {config !== null && (
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                title="点击打开应用设置"
+                className="flex items-center gap-1 rounded-(--radius-control) border border-surface-border bg-surface-muted px-2 py-0.5 text-xs text-primary hover:border-accent hover:text-accent transition-colors"
+              >
+                <span>⚙️</span>
+                <span className="font-mono">{config.model}</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -231,8 +263,15 @@ export function App() {
         <Transcript items={state.items} notice={state.notice} error={state.error} />
 
         {config !== null && !config.configured && (
-          <div className="mx-4 mb-2 rounded-(--radius-control) bg-warning-soft px-3 py-2 text-xs text-warning">
-            未检测到 API Key：请设置环境变量 CY_AGENT_API_KEY（或 OPENAI_API_KEY）后重启应用。
+          <div className="mx-4 mb-2 flex items-center justify-between rounded-(--radius-control) bg-warning-soft px-3 py-2 text-xs text-warning">
+            <span>未检测到 API Key：请在设置中配置或设置环境变量 CY_AGENT_API_KEY。</span>
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="ml-2 font-medium underline hover:text-warning-hover"
+            >
+              前往设置
+            </button>
           </div>
         )}
         {actionError !== null && (
@@ -240,6 +279,12 @@ export function App() {
             {actionError}
           </div>
         )}
+
+        <TerminalDrawer
+          workspace={workspace}
+          isOpen={terminalOpen}
+          onClose={() => setTerminalOpen(false)}
+        />
 
         <Composer running={running} onSend={handleSend} onCancel={handleCancel} />
       </main>
@@ -254,6 +299,14 @@ export function App() {
           onClose={handleCloseUpdateModal}
           onDownload={handleDownloadUpdate}
           onInstall={handleInstallUpdate}
+        />
+      )}
+
+      {settingsOpen && config !== null && (
+        <SettingsModal
+          config={config}
+          onClose={() => setSettingsOpen(false)}
+          onSave={handleSaveConfig}
         />
       )}
     </div>

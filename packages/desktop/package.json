@@ -29,6 +29,8 @@
     "@cy-agent/protocol": "workspace:*",
     "@cy-agent/storage": "workspace:*",
     "@cy-agent/tools": "workspace:*",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {

@@ -94,4 +94,30 @@ describe('loadDesktopConfig 环境变量回退', () => {
     expect(geminiConfig.apiKey).toBe('gem-rc');
     expect(geminiConfig.model).toBe('gemini-2.5-pro');
   });
+
+  it('支持 google/antigravity 模型推断与持久化设置优先覆盖', () => {
+    const autoInferred = loadDesktopConfig(
+      { CY_AGENT_MODEL: 'google/antigravity', GEMINI_API_KEY: 'gem-key' },
+      '/Documents',
+    );
+    expect(autoInferred.provider).toBe('gemini');
+    expect(autoInferred.model).toBe('google/antigravity');
+
+    const storedOverride = loadDesktopConfig(
+      { CY_AGENT_MODEL: 'gpt-4o', OPENAI_API_KEY: 'env-key' },
+      '/Documents',
+      {
+        provider: 'gemini',
+        model: 'google/antigravity',
+        apiKey: 'custom-key',
+        baseUrl: 'https://custom-proxy.com',
+        customSystemPrompt: 'Be extra detailed',
+      },
+    );
+    expect(storedOverride.provider).toBe('gemini');
+    expect(storedOverride.model).toBe('google/antigravity');
+    expect(storedOverride.apiKey).toBe('custom-key');
+    expect(storedOverride.baseUrl).toBe('https://custom-proxy.com');
+    expect(storedOverride.customSystemPrompt).toBe('Be extra detailed');
+  });
 });

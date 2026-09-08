@@ -10,6 +10,9 @@ export interface SessionSidebarProps {
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
   onCheckUpdates?: (() => void) | undefined;
+  onOpenSettings?: (() => void) | undefined;
+  onToggleTerminal?: (() => void) | undefined;
+  terminalOpen?: boolean | undefined;
 }
 
 /** 会话侧边栏：语义对齐 CLI 的 /new、/open、/delete。 */
@@ -22,6 +25,9 @@ export function SessionSidebar({
   onOpen,
   onDelete,
   onCheckUpdates,
+  onOpenSettings,
+  onToggleTerminal,
+  terminalOpen,
 }: SessionSidebarProps) {
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-surface-border bg-surface-soft">
@@ -77,17 +83,47 @@ export function SessionSidebar({
           );
         })}
       </nav>
-      <div className="flex items-center justify-between border-t border-surface-border px-3 py-2 text-[11px] text-faint">
-        <span>v{version ?? '0.0.0'}</span>
-        {onCheckUpdates && (
-          <button
-            type="button"
-            onClick={onCheckUpdates}
-            className="rounded-(--radius-control) px-2 py-0.5 text-secondary hover:bg-surface-muted hover:text-primary transition-colors"
-          >
-            检查更新
-          </button>
-        )}
+      <div className="flex flex-col gap-1.5 border-t border-surface-border px-3 py-2 text-[11px] text-faint">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            {onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="flex items-center gap-1 rounded-(--radius-control) px-1.5 py-0.5 text-secondary hover:bg-surface-muted hover:text-primary transition-colors"
+                title="打开设置面板"
+              >
+                <span>⚙️</span>
+                <span>设置</span>
+              </button>
+            )}
+            {onToggleTerminal && (
+              <button
+                type="button"
+                onClick={onToggleTerminal}
+                className={`flex items-center gap-1 rounded-(--radius-control) px-1.5 py-0.5 transition-colors ${
+                  terminalOpen
+                    ? 'bg-accent-soft text-accent font-medium'
+                    : 'text-secondary hover:bg-surface-muted hover:text-primary'
+                }`}
+                title="切换内置终端"
+              >
+                <span>💻</span>
+                <span>终端</span>
+              </button>
+            )}
+          </div>
+          {onCheckUpdates && (
+            <button
+              type="button"
+              onClick={onCheckUpdates}
+              className="rounded-(--radius-control) px-1.5 py-0.5 text-secondary hover:bg-surface-muted hover:text-primary transition-colors"
+            >
+              更新
+            </button>
+          )}
+        </div>
+        <div className="text-[10px] text-faint">v{version ?? '0.0.0'}</div>
       </div>
     </aside>
   );

@@ -5,13 +5,12 @@
 import path from 'node:path';
 import process from 'node:process';
 import { app, BrowserWindow, session, shell } from 'electron';
-import { ToolRegistry, type ProviderContract } from '@cy-agent/agent';
-import { AnthropicProvider } from '@cy-agent/anthropic-provider';
-import { GeminiProvider } from '@cy-agent/gemini-provider';
-import { OpenAICompatProvider } from '@cy-agent/openai-provider';
+import { ToolRegistry } from '@cy-agent/agent';
 import { JsonFileSessionStore } from '@cy-agent/storage';
 import { loadDesktopConfig } from './config';
-import { registerIpcHandlers } from './ipc-handlers';
+import { SettingsStore } from './settings-store';
+import { TerminalManager } from './terminal-manager';
+import { createProvider, registerIpcHandlers } from './ipc-handlers';
 import { SessionManager } from './session-manager';
 import { AppUpdater } from './updater';
 import { WorkspaceMemory } from './workspace-memory';
@@ -70,34 +69,12 @@ function bootstrap(): void {
 }
 
 async function bootstrapAsync(): Promise<void> {
-  // 环境变量配置：CY_AGENT_CWD 优先，缺省回退到用户 Documents。
-  const config = loadDesktopConfig(process.env, app.getPath('documents'));
+  // 本地持久化设置与环境变量合并加载
+  const settingsStore = new SettingsStore(path.join(app.getPath('userData'), 'settings.json'));
+  const storedSettings = settingsStore.load();
+  const config = loadDesktopConfig(process.env, app.getPath('documents'), storedSettings);
 
-  let provider: ProviderContract;
-  const apiKey = config.apiKey ?? 'missing';
-  if (config.provider === 'anthropic') {
-    provider = new AnthropicProvider({
-      apiKey,
-      model: config.model,
-      ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
-    });
-  } else if (config.provider === 'gemini') {
-    provider = new GeminiProvider({
-      apiKey,
-      model: config.model,
-      ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
-    });
-  } else {
-    const providerOptions: ConstructorParameters<typeof OpenAICompatProvider>[0] = {
-      // Key 缺失时占位构造，send 阶段以 session_error 反馈（configured=false）。
-      apiKey,
-      model: config.model,
-    };
-    if (config.baseUrl !== undefined) {
-      providerOptions.baseUrl = config.baseUrl;
-    }
-    provider = new OpenAICompatProvider(providerOptions);
-  }
+  const provider = createProvider(config);
 
   // 工作区：记忆 > CY_AGENT_CWD / Documents 回退链。
   const memory = new WorkspaceMemory(path.join(app.getPath('userData'), 'workspace.json'));
@@ -111,7 +88,12 @@ async function bootstrapAsync(): Promise<void> {
   // 应用工作区：内置工具 + 扩展（MCP/插件/技能/Sub-agent）+ systemPrompt（含概览与技能段）。
   const mcpConfig = process.env.CY_AGENT_MCP_CONFIG;
   const hasMcpConfig = mcpConfig !== undefined && mcpConfig.length > 0;
-  const prepared = await applyWorkspace(registry, workspace, BASE_SYSTEM_PROMPT, {
+  const initialBasePrompt =
+    config.customSystemPrompt && config.customSystemPrompt.length > 0
+      ? `${BASE_SYSTEM_PROMPT}\n\n${config.customSystemPrompt}`
+      : BASE_SYSTEM_PROMPT;
+
+  const prepared = await applyWorkspace(registry, workspace, initialBasePrompt, {
     ...(hasMcpConfig && mcpConfig !== undefined ? { mcpConfig } : {}),
     provider,
   });
@@ -124,13 +106,14 @@ async function bootstrapAsync(): Promise<void> {
     registry,
     store,
     systemPrompt: prepared.systemPrompt,
-    configured: config.apiKey !== undefined,
+    configured:
+      config.apiKey !== undefined && config.apiKey !== 'missing' && config.apiKey.length > 0,
   });
 
   const workspaceManagerOptions: WorkspaceManagerOptions = {
     registry,
     host: manager,
-    baseSystemPrompt: BASE_SYSTEM_PROMPT,
+    baseSystemPrompt: initialBasePrompt,
     memory,
     provider,
   };
@@ -142,6 +125,7 @@ async function bootstrapAsync(): Promise<void> {
     mcpServers: prepared.mcpServers,
   });
 
+  const terminalManager = new TerminalManager(workspace);
   const updater = new AppUpdater();
 
   registerIpcHandlers(
@@ -149,6 +133,8 @@ async function bootstrapAsync(): Promise<void> {
     workspaceManager,
     config,
     updater,
+    settingsStore,
+    terminalManager,
     () => mainWindow?.webContents ?? null,
   );
 

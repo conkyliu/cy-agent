@@ -191,6 +191,11 @@ export class WorkspaceManager {
     return this.workspace;
   }
 
+  /** 更新子智能体等扩展使用的 Provider 实例。 */
+  updateProvider(provider: ProviderContract): void {
+    this.options.provider = provider;
+  }
+
   /**
    * 切换工作区：
    * - 运行中（含未决授权挂起）拒绝，反馈明确错误由 UI 展示；

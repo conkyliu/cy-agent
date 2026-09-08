@@ -37,6 +37,18 @@ export class SessionManager {
   /** 替换 systemPrompt：后续重建会话（新建/打开/工作区切换）使用新提示词。 */
   setSystemPrompt(systemPrompt: string): void {
     this.options.systemPrompt = systemPrompt;
+    if (!this.session.isRunning) {
+      this.session = this.createSession(this.visibleMessages(), this.session.id);
+    }
+  }
+
+  /** 热重载 Provider 实例与配置状态。 */
+  updateProvider(provider: ProviderContract, configured: boolean): void {
+    this.options.provider = provider;
+    this.options.configured = configured;
+    if (!this.session.isRunning) {
+      this.session = this.createSession(this.visibleMessages(), this.session.id);
+    }
   }
 
   private forward(event: IpcAgentEvent): void {
