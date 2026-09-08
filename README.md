@@ -14,11 +14,17 @@
 
 ## ✨ 核心特性
 
-- ⚡️ **流式 Agent Loop**：基于 `AsyncGenerator` 单向事件流驱动，实时推送文本分块、工具授权请求、执行状态与生命周期事件。
-- 🛡️ **Human-in-the-loop (HITL) 交互授权**：`write_file`、`run_shell` 及远程 MCP 工具在执行前挂起等待用户显式批准；拒绝时以安全降级结果回传模型，会话不中断。
+- ⚡️ **流式 Agent Loop 与实时输出**：基于 `AsyncGenerator` 单向事件流驱动，实时推送模型生成分块与终端命令执行的标准输出/错误分块（`tool_output_chunk`），彻底消除长耗时操作时的黑盒假死感。
+- 🛡️ **Human-in-the-loop (HITL) 动态授权**：
+  - 高危工具（`write_file`、`edit_file`、复杂/写操作 Shell 命令、远程 MCP 工具）在执行前挂起等待用户显式批准；拒绝时以安全降级结果回传模型，会话不中断。
+  - **安全命令免审批规则引擎**：内置保守型白名单规则（`isSafeCommand`），对常见只读探测命令（`ls`、`pwd`、`cat`、`head`、`tail`、`wc`、`git status`、`git log` 等）自动放行，大幅降低弹窗审批疲劳，同时严格拦截重定向（`>`）、管道（`|`）、命令拼接（`;`、`&&`）与破坏性子命令。
 - 🧰 **内置编码工具集**：
   - **文件操作**：`read_file`、`write_file`、`list_directory`、`search_files`。
-  - **Git 自动快照**：`write_file` 覆写已有文件前自动生成 Git Blob 快照，附带快照 SHA，支持追溯与回滚。
+  - **精准局部编辑 (`edit_file`)**：基于目标内容唯一匹配（`targetContent`）进行精准局部替换，大幅减少长文件修改时的 Token 消耗与模型幻觉风险，支持上下文唯一性校验与多重替换模式。
+  - **零依赖 Diff 引擎与可视化**：内置基于 LCS 算法的行级差异计算与 Unified Diff 生成引擎；CLI 终端与桌面端审批卡片均提供直观的代码增删对比（红删绿增高亮）。
+  - **终端命令执行 (`run_shell`)**：支持工作区目录绑定、实时分块输出流、超时保护与外部 AbortSignal 中断。
+  - **只读子智能体 (`spawn_agent`)**：支持主智能体派生具有任务隔离与深度限制（Depth Limit）的轻量级子智能体以进行并行调查或代码检索；子智能体强制剥离写文件与 Shell 权限，确保只读沙箱安全。
+  - **Git 自动快照**：`write_file` 与 `edit_file` 覆写已有文件前自动生成 Git Blob 快照，附带快照 SHA，支持追溯与回滚。
   - **工作区安全沙箱**：内置严格的路径解析与符号链接（Symlink）逃逸检测，杜绝跨工作区非法读写。
   - **输出安全截断**：工具返回超长内容时自动按阈值截断并保留尾部提示，防止上下文爆炸。
 - 🧭 **代码导航与符号索引 (Phase 6)**：
@@ -40,7 +46,8 @@
 - 🖥️ **Electron 桌面客户端与自动更新**：
   - **设计美学**：采用 JetBrains Islands Light 浅色风格与 Tailwind 原子化设计。
   - **多工作区与会话**：可视化切换项目目录（带历史记忆），多会话侧边栏管理。
-  - **自动更新 (Auto-Update)**：集成 `electron-updater`，支持更新检测、Release Notes 预览、后台下载进度与一键重启安装。
+  - **实时终端与 Diff 审批**：实时动态控制台输出、直观的增删 Diff 审查卡片。
+  - **自动更新与故障恢复**：集成 `electron-updater`，支持更新检测、Release Notes 预览、下载进度提示与失败手动下载引导。
 
 ---
 
@@ -198,9 +205,10 @@ pnpm desktop:release
 ### 桌面端功能亮点
 
 - **设计美学**：基于 JetBrains Islands Light 浅色主题设计，层次分明，留白舒适。
-- **HITL 可视化授权**：高危工具调用以浮窗审批卡片展现，支持查看参数细节并进行一键批准/拒绝。
+- **HITL 可视化授权与 Diff 预览**：高危工具调用以浮窗审批卡片展现；为 `edit_file` 设计专门的代码增删对比卡片（红底删除、绿底新增），为各项工具调用提供直观的参数与上下文审查。
+- **实时控制台终端视窗**：在 `run_shell` 等命令执行阶段展示带脉冲动态指示灯（`animate-pulse`）的深色终端视窗，逐行自动滚动流式呈现标准输出与标准错误。
 - **工作区无缝切换**：在界面顶部轻松切换工作目录，自动重载技能、插件与符号索引，并自动记忆最近打开的目录。
-- **应用内自动更新**：依托 `electron-updater` 与 GitHub Releases，自动检测最新版本、展示 Release Notes、实时更新下载进度，支持一键“重启并安装”。
+- **应用内自动更新与容错**：依托 `electron-updater` 与 GitHub Releases，自动检测最新版本、展示 Release Notes、实时更新下载进度，支持一键“重启并安装”；并在下载异常时提供直接手动下载链接。
 
 > 💡 **macOS 首次安装提示**：
 > 若打开应用时系统提示 `“cy-agent.app”已损坏，无法打开。你应该将它移到废纸篓`，这是由于应用尚未配置 Apple 开发者商业证书公证（Notarization），被 macOS Gatekeeper 机制安全隔离。请在终端执行以下命令清除隔离属性即可正常打开：
@@ -287,6 +295,9 @@ export function createTools({ workspace }) {
 | **Phase 6** | **高级代码导航** | `find_symbol` 符号索引快速检索、`file_dependencies` 文件依赖图谱解析 | ✅ |
 | **Phase 7** | **原生多 Provider** | Anthropic Claude / Google Gemini 原生流式协议支持与智能路由 | ✅ |
 | **Desktop+** | **桌面体验增强** | 集成 `electron-updater` 自动更新模块与更新通知交互 | ✅ |
+| **Sub-Agent** | **子智能体委托** | `spawn_agent` 任务隔离、最大执行深度限制与只读沙箱隔离 | ✅ |
+| **Code Editing** | **精准文件编辑与 Diff** | `edit_file` 局部替换工具、零依赖 LCS Diff 引擎、双端 Diff 高亮呈现 | ✅ |
+| **Shell Streaming** | **流式终端与安全免审批** | `tool_output_chunk` 实时输出流、`isSafeCommand` 保守规则引擎 | ✅ |
 
 ---
 
