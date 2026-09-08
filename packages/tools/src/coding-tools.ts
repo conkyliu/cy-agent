@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { ToolBase, ToolContract } from '@cy-agent/agent';
+import { computeLineDiff, getDiffStats } from './diff.js';
 import { createGitSnapshot } from './git-snapshot.js';
 import { resolveInWorkspaceSafe, SKIPPED_DIRECTORIES } from './workspace.js';
 
@@ -10,6 +11,16 @@ export interface ReadFileArgs {
   startLine?: number;
   /** 1-based 结束行，含（可选） */
   endLine?: number;
+}
+
+export interface EditFileArgs {
+  path: string;
+  /** 被替换的精确代码块 */
+  targetContent: string;
+  /** 替换后的新代码块 */
+  replacementContent: string;
+  /** 是否允许多处匹配全部替换，默认 false */
+  allowMultiple?: boolean;
 }
 
 export interface WriteFileArgs {
@@ -98,6 +109,100 @@ export function createWriteFileTool(cwd: string): ToolContract<WriteFileArgs, st
       return `${base} (snapshot: ${snapshot}; restore with "git cat-file blob ${snapshot} > ${args.path}")`;
     },
   };
+}
+
+export function createEditFileTool(cwd: string): ToolContract<EditFileArgs, string> {
+  return {
+    name: 'edit_file',
+    description:
+      'Edit an existing text file in the workspace by replacing an exact block of code (targetContent) with new code (replacementContent). ' +
+      'Requires user approval. Creates a git snapshot before modifying. Prefer this over write_file when modifying existing files.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'File path relative to the workspace root' },
+        targetContent: {
+          type: 'string',
+          description:
+            'The exact block of code to be replaced. Must match uniquely in the file unless allowMultiple is true.',
+        },
+        replacementContent: {
+          type: 'string',
+          description: 'The new code to replace targetContent with.',
+        },
+        allowMultiple: {
+          type: 'boolean',
+          description:
+            'Optional. If true, all occurrences of targetContent will be replaced. Defaults to false.',
+        },
+      },
+      required: ['path', 'targetContent', 'replacementContent'],
+    },
+    execute: async (args) => {
+      const file = await resolveInWorkspaceSafe(cwd, args.path);
+      let content: string;
+      try {
+        content = await fs.readFile(file, 'utf8');
+      } catch (error) {
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          (error as NodeJS.ErrnoException).code === 'ENOENT'
+        ) {
+          throw new Error(
+            `File "${args.path}" does not exist. Use "write_file" to create new files.`,
+          );
+        }
+        throw error;
+      }
+
+      if (args.targetContent.length === 0) {
+        throw new Error('targetContent cannot be empty.');
+      }
+
+      const occurrences = countOccurrences(content, args.targetContent);
+      if (occurrences === 0) {
+        throw new Error(
+          `Target content not found in "${args.path}". Please verify the exact lines and formatting.`,
+        );
+      }
+
+      if (occurrences > 1 && args.allowMultiple !== true) {
+        throw new Error(
+          `Target content occurs ${occurrences} times in "${args.path}". Please provide more surrounding context lines to uniquely identify the block to replace, or set allowMultiple to true.`,
+        );
+      }
+
+      const newContent =
+        args.allowMultiple === true
+          ? content.replaceAll(args.targetContent, args.replacementContent)
+          : content.replace(args.targetContent, args.replacementContent);
+
+      const snapshot = await snapshotBeforeOverwrite(cwd, file);
+      await fs.writeFile(file, newContent, 'utf8');
+
+      const diffStats = getDiffStats(computeLineDiff(args.targetContent, args.replacementContent));
+      const base = `Successfully edited ${args.path}: replaced ${occurrences} occurrence(s) (-${diffStats.deleted} +${diffStats.added} lines).`;
+      if (snapshot === null) {
+        return base;
+      }
+      return `${base} (snapshot: ${snapshot}; restore with "git cat-file blob ${snapshot} > ${args.path}")`;
+    },
+  };
+}
+
+function countOccurrences(haystack: string, needle: string): number {
+  if (needle.length === 0) {
+    return 0;
+  }
+  let count = 0;
+  let pos = 0;
+  while ((pos = haystack.indexOf(needle, pos)) !== -1) {
+    count++;
+    pos += needle.length;
+  }
+  return count;
 }
 
 /** 目标文件已存在时创建快照并返回 blob SHA；否则或失败时返回 null。 */
@@ -237,6 +342,7 @@ async function collectFiles(root: string, signal?: AbortSignal): Promise<string[
 export function createCodingTools(cwd: string): ToolBase[] {
   return [
     createReadFileTool(cwd),
+    createEditFileTool(cwd),
     createWriteFileTool(cwd),
     createListDirectoryTool(cwd),
     createSearchFilesTool(cwd),

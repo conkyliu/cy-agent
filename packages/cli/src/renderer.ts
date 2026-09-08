@@ -68,12 +68,26 @@ export function renderEvent(event: AgentEvent, options: RenderOptions = {}): str
         ANSI.dim,
         color,
       );
-    case 'tool_approval_requested':
+    case 'tool_approval_requested': {
+      if (
+        event.name === 'edit_file' &&
+        typeof event.args === 'object' &&
+        event.args !== null &&
+        'targetContent' in event.args &&
+        'replacementContent' in event.args &&
+        'path' in event.args
+      ) {
+        const filePath = String((event.args as { path: unknown }).path);
+        const target = String((event.args as { targetContent: unknown }).targetContent);
+        const replacement = String((event.args as { replacementContent: unknown }).replacementContent);
+        return formatEditApproval(filePath, target, replacement, color);
+      }
       return paint(
         `\n⚠ Approval required for "${event.name}"\n  args: ${preview(event.args)}\n`,
         ANSI.yellow,
         color,
       );
+    }
     case 'tool_execution_started':
       return paint(`\n⚙ ${event.name} ${preview(event.args)}\n`, ANSI.cyan, color);
     case 'tool_execution_completed':
@@ -96,4 +110,16 @@ export function renderEvent(event: AgentEvent, options: RenderOptions = {}): str
       return String(exhaustive);
     }
   }
+}
+
+function formatEditApproval(
+  filePath: string,
+  targetContent: string,
+  replacementContent: string,
+  color: boolean,
+): string {
+  const header = paint(`\n⚠ Approval required for "edit_file" (${filePath})\n`, ANSI.yellow, color);
+  const targetLines = targetContent.split('\n').map((l) => paint(`- ${l}`, ANSI.red, color));
+  const replLines = replacementContent.split('\n').map((l) => paint(`+ ${l}`, ANSI.green, color));
+  return `${header}${targetLines.join('\n')}\n${replLines.join('\n')}\n`;
 }

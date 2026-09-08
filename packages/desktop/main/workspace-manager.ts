@@ -25,6 +25,7 @@ import type { WorkspaceMemory } from './workspace-memory';
 /** 与工作区绑定的内置工具名（切换时整体重建）。 */
 const WORKSPACE_TOOL_NAMES = [
   'read_file',
+  'edit_file',
   'write_file',
   'list_directory',
   'search_files',

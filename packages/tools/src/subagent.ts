@@ -103,7 +103,8 @@ export function createDelegateTaskTool(
           if (
             tool.name !== 'delegate_task' &&
             tool.name !== 'run_shell' &&
-            tool.name !== 'write_file'
+            tool.name !== 'write_file' &&
+            tool.name !== 'edit_file'
           ) {
             subRegistry.register(tool);
           }

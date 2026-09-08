@@ -58,6 +58,55 @@ describe('coding tools', () => {
     );
   });
 
+  it('edit_file replaces unique target block and handles errors gracefully', async () => {
+    const edit = tool('edit_file');
+    expect(edit.requiresApproval).toBe(true);
+
+    await writeFile(path.join(cwd, 'sample.ts'), 'function add(a: number, b: number) {\n  return a - b;\n}\n');
+
+    // 正常精准替换
+    const result = await edit.execute({
+      path: 'sample.ts',
+      targetContent: '  return a - b;',
+      replacementContent: '  return a + b;',
+    });
+    expect(result).toContain('Successfully edited sample.ts');
+    await expect(readFile(path.join(cwd, 'sample.ts'), 'utf8')).resolves.toBe(
+      'function add(a: number, b: number) {\n  return a + b;\n}\n',
+    );
+
+    // 文件不存在
+    await expect(
+      edit.execute({ path: 'nonexistent.ts', targetContent: 'a', replacementContent: 'b' }),
+    ).rejects.toThrow(/does not exist.*write_file/);
+
+    // 目标内容不存在
+    await expect(
+      edit.execute({ path: 'sample.ts', targetContent: 'missing code', replacementContent: 'new code' }),
+    ).rejects.toThrow(/Target content not found/);
+
+    // 目标内容为空
+    await expect(
+      edit.execute({ path: 'sample.ts', targetContent: '', replacementContent: 'x' }),
+    ).rejects.toThrow(/targetContent cannot be empty/);
+
+    // 多处匹配且未设置 allowMultiple
+    await writeFile(path.join(cwd, 'multi.txt'), 'foo\nbar\nfoo\n');
+    await expect(
+      edit.execute({ path: 'multi.txt', targetContent: 'foo', replacementContent: 'baz' }),
+    ).rejects.toThrow(/occurs 2 times/);
+
+    // 多处匹配且设置了 allowMultiple: true
+    const multiResult = await edit.execute({
+      path: 'multi.txt',
+      targetContent: 'foo',
+      replacementContent: 'baz',
+      allowMultiple: true,
+    });
+    expect(multiResult).toContain('replaced 2 occurrence(s)');
+    await expect(readFile(path.join(cwd, 'multi.txt'), 'utf8')).resolves.toBe('baz\nbar\nbaz\n');
+  });
+
   it('list_directory lists sorted entries with type markers', async () => {
     await writeFile(path.join(cwd, 'z.txt'), 'z');
     await writeFile(path.join(cwd, 'a.txt'), 'a');
@@ -93,6 +142,13 @@ describe('coding tools', () => {
     );
     await expect(
       tool('write_file').execute({ path: '../../evil.txt', content: 'x' }),
+    ).rejects.toThrow(/escapes the workspace/);
+    await expect(
+      tool('edit_file').execute({
+        path: '../../evil.txt',
+        targetContent: 'a',
+        replacementContent: 'b',
+      }),
     ).rejects.toThrow(/escapes the workspace/);
     await expect(tool('list_directory').execute({ path: '..' })).rejects.toThrow(
       /escapes the workspace/,

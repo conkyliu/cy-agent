@@ -1,14 +1,23 @@
 export {
   createCodingTools,
   createReadFileTool,
+  createEditFileTool,
   createWriteFileTool,
   createListDirectoryTool,
   createSearchFilesTool,
   type ReadFileArgs,
+  type EditFileArgs,
   type WriteFileArgs,
   type ListDirectoryArgs,
   type SearchFilesArgs,
 } from './coding-tools.js';
+export {
+  computeLineDiff,
+  computeUnifiedDiff,
+  getDiffStats,
+  type DiffLine,
+  type DiffStats,
+} from './diff.js';
 export { resolveInWorkspace, resolveInWorkspaceSafe, SKIPPED_DIRECTORIES } from './workspace.js';
 export { buildWorkspaceOverview, withWorkspaceOverview } from './workspace-context.js';
 export { createRunShellTool, type RunShellArgs } from './shell-tool.js';

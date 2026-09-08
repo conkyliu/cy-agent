@@ -23,8 +23,9 @@ import {
 } from './workspace-manager';
 
 const BASE_SYSTEM_PROMPT = `You are cy-agent, a coding assistant operating inside the user's workspace.
-Use the provided tools (read_file, write_file, list_directory, search_files, run_shell) to inspect and modify code.
-Be concise. write_file and run_shell require explicit user approval and will be prompted automatically.`;
+Use the provided tools (read_file, edit_file, write_file, list_directory, search_files, run_shell) to inspect and modify code.
+Prefer edit_file for modifying existing files by replacing targeted code blocks. Use write_file for creating new files or full overwrites.
+Be concise. edit_file, write_file, and run_shell require explicit user approval and will be prompted automatically.`;
 
 let mainWindow: BrowserWindow | null = null;
 
